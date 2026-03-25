@@ -9,7 +9,8 @@ from app.auth import get_current_active_user
 router = APIRouter(prefix="/api/classes", tags=["班级管理"])
 
 def get_accessible_class_ids(user: User, db: Session) -> List[int]:
-    if user.role == "admin":
+    """获取用户可访问的班级ID列表"""
+    if user.role.value == "admin":
         classes = db.query(Class).all()
         return [c.id for c in classes]
     elif user.class_id:

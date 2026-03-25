@@ -92,8 +92,8 @@
                 {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
               </el-avatar>
               <span class="username">{{ userStore.userInfo?.real_name }}</span>
-              <el-tag :type="userStore.isAdmin ? 'danger' : 'success'" size="small" effect="dark">
-                {{ userStore.isAdmin ? '管理员' : '班主任' }}
+              <el-tag :type="getRoleTagType(userStore.userInfo?.role)" size="small" effect="dark">
+                {{ getRoleText(userStore.userInfo?.role) }}
               </el-tag>
             </div>
             <template #dropdown>
@@ -179,6 +179,24 @@ const currentRouteName = computed(() => {
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
+}
+
+const getRoleText = (role) => {
+  const roleMap = {
+    'admin': '管理员',
+    'class_teacher': '班主任',
+    'teacher': '任课教师'
+  }
+  return roleMap[role] || '未知角色'
+}
+
+const getRoleTagType = (role) => {
+  const typeMap = {
+    'admin': 'danger',
+    'class_teacher': 'warning',
+    'teacher': 'success'
+  }
+  return typeMap[role] || 'info'
 }
 
 const handleCommand = (command) => {

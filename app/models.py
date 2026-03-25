@@ -6,7 +6,8 @@ import enum
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
-    TEACHER = "teacher"
+    CLASS_TEACHER = "class_teacher"  # 班主任
+    TEACHER = "teacher"  # 任课教师
 
 class Gender(str, enum.Enum):
     MALE = "male"

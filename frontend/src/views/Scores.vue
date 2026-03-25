@@ -20,7 +20,7 @@
           <el-icon><Upload /></el-icon>
           批量导入
         </el-button>
-        <el-button type="info" @click="showAnalysisDialog = true">
+        <el-button type="info" @click="handleOpenAnalysis">
           <el-icon><DataAnalysis /></el-icon>
           成绩分析
         </el-button>
@@ -409,6 +409,36 @@ const calculateStatistics = () => {
   scoreDistribution.fail = scores_list.filter(s => s < 60).length
 }
 
+const handleOpenAnalysis = async () => {
+  try {
+    loading.value = true
+    
+    const data = await api.scores.list({
+      class_id: filterClassId.value || undefined,
+      semester: filterSemester.value || undefined,
+      page: 1,
+      page_size: 1000
+    })
+    
+    const allScores = (data?.data || []).map(s => ({
+      ...s,
+      student_name: s.student_name || students.value.find(st => st.id === s.student_id)?.name || '',
+      subject_name: s.subject_name || subjects.value.find(sub => sub.id === s.subject_id)?.name || ''
+    }))
+    
+    scores.value = allScores
+    calculateStatistics()
+    calculateStudentRanking()
+    
+    showAnalysisDialog.value = true
+  } catch (e) {
+    console.error('加载成绩数据失败:', e)
+    ElMessage.error('加载成绩数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleExportScores = async () => {
   try {
     exportLoading.value = true
@@ -467,21 +497,30 @@ const initDistributionChart = () => {
   const distribution = [0, 0, 0, 0, 0]
   
   scores.value.forEach(s => {
-    if (s.score >= 90) distribution[0]++
-    else if (s.score >= 80) distribution[1]++
-    else if (s.score >= 70) distribution[2]++
-    else if (s.score >= 60) distribution[3]++
+    const score = parseFloat(s.score)
+    if (isNaN(score)) return
+    if (score >= 90) distribution[0]++
+    else if (score >= 80) distribution[1]++
+    else if (score >= 70) distribution[2]++
+    else if (score >= 60) distribution[3]++
     else distribution[4]++
   })
   
   const option = {
     title: {
       text: '成绩分布直方图',
-      left: 'center'
+      left: 'center',
+      top: 10
     },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' }
+    },
+    grid: {
+      left: '10%',
+      right: '10%',
+      top: '80px',
+      bottom: '60px'
     },
     xAxis: {
       type: 'category',
@@ -517,29 +556,46 @@ const initSubjectsChart = () => {
   
   scores.value.forEach(s => {
     const subject = s.subject_name || '未知科目'
+    const score = parseFloat(s.score)
     if (!subjectScores[subject]) {
       subjectScores[subject] = []
     }
-    subjectScores[subject].push(s.score)
+    if (!isNaN(score)) {
+      subjectScores[subject].push(score)
+    }
   })
   
   const subjects = Object.keys(subjectScores)
   const averages = subjects.map(s => {
     const scores_list = subjectScores[s]
-    return (scores_list.reduce((a, b) => a + b, 0) / scores_list.length).toFixed(1)
+    if (scores_list.length === 0) return 0
+    const avg = scores_list.reduce((a, b) => a + b, 0) / scores_list.length
+    return parseFloat(avg.toFixed(1))
   })
   
   const option = {
     title: {
       text: '各科目平均分对比',
-      left: 'center'
+      left: 'center',
+      top: 10
     },
     tooltip: {
       trigger: 'axis'
     },
+    grid: {
+      left: '10%',
+      right: '10%',
+      top: '80px',
+      bottom: '60px'
+    },
     xAxis: {
       type: 'category',
-      data: subjects
+      data: subjects,
+      axisLabel: {
+        interval: 0,
+        rotate: subjects.length > 5 ? 30 : 0,
+        fontSize: 11
+      }
     },
     yAxis: {
       type: 'value',
@@ -554,7 +610,8 @@ const initSubjectsChart = () => {
       },
       label: {
         show: true,
-        position: 'top'
+        position: 'top',
+        formatter: '{c}'
       }
     }]
   }
@@ -572,13 +629,16 @@ const initTrendChart = () => {
   const subjectScores = {}
   scores.value.forEach(s => {
     const subject = s.subject_name || '未知科目'
+    const score = parseFloat(s.score)
     if (!subjectScores[subject]) {
       subjectScores[subject] = []
     }
-    subjectScores[subject].push({
-      date: s.exam_date,
-      score: s.score
-    })
+    if (!isNaN(score)) {
+      subjectScores[subject].push({
+        date: s.exam_date,
+        score: score
+      })
+    }
   })
   
   const series = Object.keys(subjectScores).map(subject => ({
@@ -594,14 +654,21 @@ const initTrendChart = () => {
   const option = {
     title: {
       text: '成绩趋势变化',
-      left: 'center'
+      left: 'center',
+      top: 10
     },
     tooltip: {
       trigger: 'axis'
     },
+    grid: {
+      left: '10%',
+      right: '10%',
+      top: '80px',
+      bottom: '80px'
+    },
     legend: {
       data: Object.keys(subjectScores),
-      bottom: 0
+      bottom: 10
     },
     xAxis: {
       type: 'category',
