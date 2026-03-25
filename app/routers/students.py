@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import User, Student, Class
+from app.models import User, Student, Class, Score, Attendance
 from app.schemas import StudentCreate, StudentUpdate, StudentResponse, StudentListResponse
 from app.auth import get_current_active_user
 from app.routers.classes import get_accessible_class_ids
@@ -200,9 +200,15 @@ def delete_student(
     if student.class_id not in class_ids:
         raise HTTPException(status_code=403, detail="无权删除该学生")
     
-    db.delete(student)
-    db.commit()
-    return {"message": "学生删除成功"}
+    try:
+        db.query(Attendance).filter(Attendance.student_id == student_id).delete()
+        db.query(Score).filter(Score.student_id == student_id).delete()
+        db.delete(student)
+        db.commit()
+        return {"message": "学生删除成功"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"删除学生失败: {str(e)}")
 
 from fastapi import Request
 from urllib.parse import parse_qs
