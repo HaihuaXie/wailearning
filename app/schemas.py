@@ -1,12 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    CLASS_TEACHER = "class_teacher"  # 班主任
-    TEACHER = "teacher"  # 任课教师
+    CLASS_TEACHER = "class_teacher"
+    TEACHER = "teacher"
 
 class Gender(str, Enum):
     MALE = "male"
@@ -21,8 +21,15 @@ class AttendanceStatus(str, Enum):
 class UserBase(BaseModel):
     username: str
     real_name: str
-    role: UserRole = UserRole.TEACHER
+    role: str = "teacher"
     class_id: Optional[int] = None
+    
+    @field_validator('role', mode='before')
+    @classmethod
+    def convert_role(cls, v):
+        if isinstance(v, UserRole):
+            return v.value
+        return v
 
 class UserCreate(UserBase):
     password: str
@@ -30,7 +37,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     real_name: Optional[str] = None
-    role: Optional[UserRole] = None
+    role: Optional[str] = None
     class_id: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -51,21 +58,23 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-class ClassBase(BaseModel):
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+class ClassCreate(BaseModel):
     name: str
     grade: int
-
-class ClassCreate(ClassBase):
-    pass
 
 class ClassUpdate(BaseModel):
     name: Optional[str] = None
     grade: Optional[int] = None
 
-class ClassResponse(ClassBase):
+class ClassResponse(BaseModel):
     id: int
+    name: str
+    grade: int
     created_at: datetime
-    student_count: Optional[int] = 0
+    student_count: int = 0
 
     class Config:
         from_attributes = True
@@ -73,7 +82,7 @@ class ClassResponse(ClassBase):
 class StudentBase(BaseModel):
     name: str
     student_no: str
-    gender: Optional[Gender] = None
+    gender: Gender
     phone: Optional[str] = None
     parent_phone: Optional[str] = None
     address: Optional[str] = None
@@ -104,17 +113,37 @@ class StudentListResponse(BaseModel):
     total: int
     data: List[StudentResponse]
 
+class SubjectCreate(BaseModel):
+    name: str
+    teacher_id: Optional[int] = None
+
+class SubjectUpdate(BaseModel):
+    name: Optional[str] = None
+    teacher_id: Optional[int] = None
+
+class SubjectResponse(BaseModel):
+    id: int
+    name: str
+    teacher_id: Optional[int] = None
+
     class Config:
         from_attributes = True
 
-class SubjectBase(BaseModel):
+class SemesterCreate(BaseModel):
     name: str
+    year: int
+    is_current: bool = False
 
-class SubjectCreate(SubjectBase):
-    pass
+class SemesterUpdate(BaseModel):
+    name: Optional[str] = None
+    year: Optional[int] = None
+    is_current: Optional[bool] = None
 
-class SubjectResponse(SubjectBase):
+class SemesterResponse(BaseModel):
     id: int
+    name: str
+    year: int
+    is_active: bool
     created_at: datetime
 
     class Config:
@@ -124,10 +153,10 @@ class ScoreBase(BaseModel):
     student_id: int
     subject_id: int
     class_id: int
-    score: float
-    exam_type: str = "midterm"
-    exam_date: Optional[datetime] = None
     semester: str
+    exam_type: str
+    score: float
+    exam_date: Optional[str] = None
 
 class ScoreCreate(ScoreBase):
     pass
@@ -135,16 +164,13 @@ class ScoreCreate(ScoreBase):
 class ScoreUpdate(BaseModel):
     score: Optional[float] = None
     exam_type: Optional[str] = None
-    exam_date: Optional[datetime] = None
-    semester: Optional[str] = None
+    exam_date: Optional[str] = None
 
 class ScoreResponse(ScoreBase):
     id: int
-    class_id: int
-    created_at: datetime
     student_name: Optional[str] = None
     subject_name: Optional[str] = None
-    exam_date: Optional[datetime] = None
+    class_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -153,13 +179,11 @@ class ScoreListResponse(BaseModel):
     total: int
     data: List[ScoreResponse]
 
-    class Config:
-        from_attributes = True
-
 class AttendanceBase(BaseModel):
     student_id: int
-    date: datetime
-    status: AttendanceStatus = AttendanceStatus.PRESENT
+    class_id: int
+    date: str
+    status: AttendanceStatus
     remark: Optional[str] = None
 
 class AttendanceCreate(AttendanceBase):
@@ -171,9 +195,8 @@ class AttendanceUpdate(BaseModel):
 
 class AttendanceResponse(AttendanceBase):
     id: int
-    class_id: int
-    created_at: datetime
     student_name: Optional[str] = None
+    class_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -182,23 +205,20 @@ class AttendanceListResponse(BaseModel):
     total: int
     data: List[AttendanceResponse]
 
-    class Config:
-        from_attributes = True
-
-class DashboardStats(BaseModel):
-    total_students: int
-    total_classes: int
-    total_scores: int
-    avg_score: float
-    attendance_rate: float
-    recent_scores: List[ScoreResponse] = []
-    class_rankings: List[dict] = []
-
 class ClassRanking(BaseModel):
     class_id: int
     class_name: str
     avg_score: float
     rank: int
+
+class DashboardStats(BaseModel):
+    total_students: int
+    total_classes: int
+    total_scores: int = 0
+    avg_score: float
+    attendance_rate: float = 0.0
+    recent_scores: List[ScoreResponse] = []
+    class_rankings: List[ClassRanking] = []
 
 class StudentRanking(BaseModel):
     student_id: int
@@ -207,16 +227,23 @@ class StudentRanking(BaseModel):
     avg_score: float
     rank: int
 
-class SemesterBase(BaseModel):
-    name: str
-    year: int
-
-class SemesterCreate(SemesterBase):
-    pass
-
-class SemesterResponse(SemesterBase):
+class OperationLogResponse(BaseModel):
     id: int
-    is_active: bool
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+    action: str
+    target_type: str
+    target_id: Optional[int] = None
+    target_name: Optional[str] = None
+    details: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    result: str
+    created_at: datetime
 
     class Config:
         from_attributes = True
+
+class OperationLogListResponse(BaseModel):
+    total: int
+    data: List[OperationLogResponse]

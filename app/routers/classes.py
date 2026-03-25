@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import User, Class, Student
+from app.models import User, Class, Student, UserRole
 from app.schemas import ClassCreate, ClassUpdate, ClassResponse
 from app.auth import get_current_active_user
 
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/classes", tags=["班级管理"])
 
 def get_accessible_class_ids(user: User, db: Session) -> List[int]:
     """获取用户可访问的班级ID列表"""
-    if user.role.value == "admin":
+    if user.role == UserRole.ADMIN:
         classes = db.query(Class).all()
         return [c.id for c in classes]
     elif user.class_id:
@@ -44,7 +44,7 @@ def create_class(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="只有管理员可以创建班级")
     
     new_class = Class(name=class_data.name, grade=class_data.grade)
@@ -79,7 +79,7 @@ def update_class(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="只有管理员可以修改班级")
     
     class_obj = db.query(Class).filter(Class.id == class_id).first()
@@ -104,12 +104,16 @@ def delete_class(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="只有管理员可以删除班级")
     
     class_obj = db.query(Class).filter(Class.id == class_id).first()
     if not class_obj:
         raise HTTPException(status_code=404, detail="班级不存在")
+    
+    students = db.query(Student).filter(Student.class_id == class_id).count()
+    if students > 0:
+        raise HTTPException(status_code=400, detail="该班级下还有学生，无法删除")
     
     db.delete(class_obj)
     db.commit()

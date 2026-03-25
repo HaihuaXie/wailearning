@@ -68,6 +68,12 @@ const routes = [
         name: 'Semesters',
         component: () => import('@/views/Semesters.vue'),
         meta: { requiresAdmin: true }
+      },
+      {
+        path: 'logs',
+        name: 'Logs',
+        component: () => import('@/views/Logs.vue'),
+        meta: { requiresAdmin: true }
       }
     ]
   }

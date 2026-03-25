@@ -26,7 +26,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     real_name = Column(String, nullable=False)
-    role = Column(SQLEnum(UserRole), default=UserRole.TEACHER)
+    role = Column(String, nullable=False, default="teacher")
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -117,4 +117,20 @@ class Semester(Base):
     name = Column(String, nullable=False, unique=True)
     year = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class OperationLog(Base):
+    __tablename__ = "operation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    username = Column(String, nullable=True)
+    action = Column(String, nullable=False)
+    target_type = Column(String, nullable=False)
+    target_id = Column(Integer, nullable=True)
+    target_name = Column(String, nullable=True)
+    details = Column(String, nullable=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    result = Column(String, default="success")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

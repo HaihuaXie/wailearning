@@ -13,10 +13,10 @@
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="real_name" label="姓名" />
-        <el-table-column prop="role" label="角色" width="100">
+        <el-table-column prop="role" label="角色" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.role === 'admin' ? 'danger' : 'success'">
-              {{ row.role === 'admin' ? '管理员' : '班主任' }}
+            <el-tag :type="getRoleTagType(row.role)">
+              {{ getRoleText(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -49,8 +49,9 @@
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-radio-group v-model="form.role">
-            <el-radio label="teacher">班主任</el-radio>
             <el-radio label="admin">管理员</el-radio>
+            <el-radio label="class_teacher">班主任</el-radio>
+            <el-radio label="teacher">任课教师</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="班级" prop="class_id">
@@ -97,6 +98,24 @@ const rules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   real_name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+}
+
+const getRoleText = (role) => {
+  const roleMap = {
+    'admin': '管理员',
+    'class_teacher': '班主任',
+    'teacher': '任课教师'
+  }
+  return roleMap[role] || '未知角色'
+}
+
+const getRoleTagType = (role) => {
+  const typeMap = {
+    'admin': 'danger',
+    'class_teacher': 'warning',
+    'teacher': 'success'
+  }
+  return typeMap[role] || 'info'
 }
 
 const loadUsers = async () => {

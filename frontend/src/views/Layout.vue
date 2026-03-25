@@ -70,6 +70,10 @@
           <el-icon><Collection /></el-icon>
           <template #title>学期管理</template>
         </el-menu-item>
+        <el-menu-item index="/logs" v-if="userStore.isAdmin">
+          <el-icon><Clock /></el-icon>
+          <template #title>操作日志</template>
+        </el-menu-item>
       </el-menu>
 
       <div class="sidebar-footer" v-if="!isCollapsed">
@@ -148,6 +152,7 @@ import {
   Reading,
   SwitchButton,
   Collection,
+  Clock,
   Expand,
   Fold,
   Setting
@@ -172,7 +177,8 @@ const currentRouteName = computed(() => {
     '/analysis': '数据分析',
     '/users': '用户管理',
     '/subjects': '科目管理',
-    '/semesters': '学期管理'
+    '/semesters': '学期管理',
+    '/logs': '操作日志'
   }
   return routeMap[route.path] || '页面'
 })
