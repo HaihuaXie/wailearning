@@ -11,6 +11,18 @@
           <el-icon><Upload /></el-icon>
           批量导入
         </el-button>
+        <el-button type="warning" @click="showBatchEditDialog = true" :disabled="selectedStudents.length === 0">
+          <el-icon><Edit /></el-icon>
+          批量修改 ({{ selectedStudents.length }})
+        </el-button>
+        <el-button type="danger" @click="handleBatchDelete" :disabled="selectedStudents.length === 0">
+          <el-icon><Delete /></el-icon>
+          批量删除 ({{ selectedStudents.length }})
+        </el-button>
+        <el-button type="info" @click="handleExportStudents" :loading="exportLoading">
+          <el-icon><Download /></el-icon>
+          导出学生
+        </el-button>
       </div>
     </div>
     
@@ -89,7 +101,8 @@
     </el-card>
 
     <div class="table-container">
-      <el-table :data="students" style="width: 100%" v-loading="loading">
+      <el-table :data="students" style="width: 100%" v-loading="loading" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="name" label="姓名" />
         <el-table-column prop="student_no" label="学号" />
@@ -338,14 +351,51 @@
         <el-button type="primary" @click="closeResultDialog">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="showBatchEditDialog" title="批量修改学生" width="600px">
+      <el-alert
+        :title="`已选择 ${selectedStudents.length} 名学生`"
+        type="info"
+        :closable="false"
+        style="margin-bottom: 20px;"
+      />
+      
+      <el-form :model="batchEditForm" label-width="100px">
+        <el-form-item label="修改班级">
+          <el-select v-model="batchEditForm.class_id" placeholder="不修改" clearable style="width: 100%;">
+            <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        
+        <el-form-item label="修改电话">
+          <el-input v-model="batchEditForm.phone" placeholder="不修改请留空" clearable />
+        </el-form-item>
+        
+        <el-form-item label="修改家长电话">
+          <el-input v-model="batchEditForm.parent_phone" placeholder="不修改请留空" clearable />
+        </el-form-item>
+        
+        <el-form-item label="修改地址">
+          <el-input v-model="batchEditForm.address" placeholder="不修改请留空" clearable />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <el-button @click="showBatchEditDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleBatchEdit" :loading="batchEditLoading">
+          确认修改 ({{ selectedStudents.length }})
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Upload, UploadFilled, Download, Document, CircleCheck, CircleClose, Warning, Collection, ArrowUp, ArrowDown, Star, StarFilled } from '@element-plus/icons-vue'
+import { Plus, Upload, UploadFilled, Download, Document, CircleCheck, CircleClose, Warning, Collection, ArrowUp, ArrowDown, Star, StarFilled, Edit, Delete } from '@element-plus/icons-vue'
 import axios from 'axios'
+import api from '@/api'
 import * as XLSX from 'xlsx'
 
 const baseURL = '/api'
@@ -356,12 +406,24 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const showBatchDialog = ref(false)
 const showResultDialog = ref(false)
+const showBatchEditDialog = ref(false)
 const isEdit = ref(false)
 const editingId = ref(null)
 const formRef = ref(null)
 const batchLoading = ref(false)
+const batchEditLoading = ref(false)
 const uploadRef = ref(null)
 const importResult = ref(null)
+const selectedStudents = ref([])
+
+const batchEditForm = reactive({
+  class_id: null,
+  phone: '',
+  parent_phone: '',
+  address: ''
+})
+
+const exportLoading = ref(false)
 
 const searchName = ref('')
 const filterClassId = ref(null)
@@ -670,6 +732,192 @@ const resetBatchForm = () => {
   batchForm.class_id = null
   if (uploadRef.value) {
     uploadRef.value.clearFiles()
+  }
+}
+
+const handleSelectionChange = (selection) => {
+  selectedStudents.value = selection
+}
+
+const handleBatchDelete = async () => {
+  if (selectedStudents.value.length === 0) {
+    ElMessage.warning('请先选择要删除的学生')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedStudents.value.length} 名学生吗？此操作不可恢复！`,
+      '批量删除确认',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+    
+    loading.value = true
+    let successCount = 0
+    let failCount = 0
+    let errorMessages = []
+    
+    for (const student of selectedStudents.value) {
+      try {
+        console.log(`正在删除学生: ${student.name} (ID: ${student.id})`)
+        await api.students.delete(student.id)
+        successCount++
+        console.log(`删除学生成功: ${student.name}`)
+      } catch (e) {
+        failCount++
+        const errorMsg = e.response?.data?.detail || e.message || '未知错误'
+        errorMessages.push(`${student.name}: ${errorMsg}`)
+        console.error(`删除学生 ${student.name} 失败:`, errorMsg, e)
+      }
+    }
+    
+    loading.value = false
+    selectedStudents.value = []
+    loadStudents()
+    
+    if (failCount === 0) {
+      ElMessage.success(`成功删除 ${successCount} 名学生`)
+    } else {
+      ElMessage.error({
+        message: `成功删除 ${successCount} 名学生，${failCount} 名删除失败\n失败原因：${errorMessages.join('; ')}`,
+        duration: 5000
+      })
+    }
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error('批量删除异常:', e)
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
+const handleExportStudents = async () => {
+  try {
+    exportLoading.value = true
+    
+    const data = await api.students.list({
+      class_id: filterClassId.value || undefined,
+      page: 1,
+      page_size: 1000
+    })
+    
+    const studentsList = data?.data || []
+    
+    if (studentsList.length === 0) {
+      ElMessage.warning('没有学生数据可导出')
+      exportLoading.value = false
+      return
+    }
+    
+    const exportData = [
+      ['姓名', '学号', '性别', '班级', '电话', '家长电话', '地址']
+    ]
+    
+    studentsList.forEach(s => {
+      exportData.push([
+        s.name || '',
+        s.student_no || '',
+        s.gender === 'male' ? '男' : s.gender === 'female' ? '女' : '',
+        s.class_name || '',
+        s.phone || '',
+        s.parent_phone || '',
+        s.address || ''
+      ])
+    })
+    
+    const ws = XLSX.utils.aoa_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '学生名单')
+    
+    const timestamp = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(wb, `学生名单_${timestamp}.xlsx`)
+    
+    exportLoading.value = false
+    ElMessage.success(`成功导出 ${studentsList.length} 名学生`)
+  } catch (e) {
+    exportLoading.value = false
+    console.error('导出学生失败:', e)
+    ElMessage.error('导出学生失败')
+  }
+}
+
+const handleBatchEdit = async () => {
+  if (selectedStudents.value.length === 0) {
+    ElMessage.warning('请先选择要修改的学生')
+    return
+  }
+  
+  if (!batchEditForm.class_id && !batchEditForm.phone && !batchEditForm.parent_phone && !batchEditForm.address) {
+    ElMessage.warning('请至少选择一项要修改的内容')
+    return
+  }
+  
+  try {
+    await ElMessageBox.confirm(
+      `确定要修改选中的 ${selectedStudents.value.length} 名学生吗？`,
+      '批量修改确认',
+      {
+        confirmButtonText: '确定修改',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    batchEditLoading.value = true
+    let successCount = 0
+    let failCount = 0
+    let errorMessages = []
+    
+    for (const student of selectedStudents.value) {
+      try {
+        const updateData = {}
+        if (batchEditForm.class_id) updateData.class_id = batchEditForm.class_id
+        if (batchEditForm.phone !== '') updateData.phone = batchEditForm.phone
+        if (batchEditForm.parent_phone !== '') updateData.parent_phone = batchEditForm.parent_phone
+        if (batchEditForm.address !== '') updateData.address = batchEditForm.address
+        
+        if (Object.keys(updateData).length > 0) {
+          console.log(`正在修改学生: ${student.name} (ID: ${student.id})`, updateData)
+          await api.students.update(student.id, updateData)
+          successCount++
+          console.log(`修改学生成功: ${student.name}`)
+        }
+      } catch (e) {
+        failCount++
+        const errorMsg = e.response?.data?.detail || e.message || '未知错误'
+        errorMessages.push(`${student.name}: ${errorMsg}`)
+        console.error(`修改学生 ${student.name} 失败:`, errorMsg, e)
+      }
+    }
+    
+    batchEditLoading.value = false
+    showBatchEditDialog.value = false
+    selectedStudents.value = []
+    loadStudents()
+    
+    batchEditForm.class_id = null
+    batchEditForm.phone = ''
+    batchEditForm.parent_phone = ''
+    batchEditForm.address = ''
+    
+    if (failCount === 0) {
+      ElMessage.success(`成功修改 ${successCount} 名学生`)
+    } else {
+      ElMessage.error({
+        message: `成功修改 ${successCount} 名学生，${failCount} 名修改失败\n失败原因：${errorMessages.join('; ')}`,
+        duration: 5000
+      })
+    }
+  } catch (e) {
+    if (e !== 'cancel') {
+      console.error('批量修改异常:', e)
+      ElMessage.error('批量修改失败')
+    }
   }
 }
 
