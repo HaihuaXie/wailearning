@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import User, Student, Class, Score, Attendance
+from app.course_access import sync_student_course_enrollments
+from app.models import User, Student, Class, Score, Attendance, CourseEnrollment
 from app.schemas import StudentCreate, StudentUpdate, StudentResponse, StudentListResponse
 from app.auth import get_current_active_user
 from app.routers.classes import get_accessible_class_ids
@@ -82,6 +83,8 @@ def create_student(
         teacher_id=current_user.id if current_user.role == "teacher" else None
     )
     db.add(student)
+    db.flush()
+    sync_student_course_enrollments(student, db)
     db.commit()
     db.refresh(student)
     
@@ -166,11 +169,18 @@ def update_student(
         student.parent_phone = student_data.parent_phone
     if student_data.address is not None:
         student.address = student_data.address
+    class_changed = False
     if student_data.class_id is not None:
         if student_data.class_id not in class_ids:
             raise HTTPException(status_code=403, detail="无权移动到该班级")
+        class_changed = student.class_id != student_data.class_id
         student.class_id = student_data.class_id
-    
+
+    if class_changed:
+        db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student.id).delete()
+        db.flush()
+        sync_student_course_enrollments(student, db)
+
     db.commit()
     db.refresh(student)
     
@@ -205,6 +215,7 @@ def delete_student(
         raise HTTPException(status_code=403, detail="无权删除该学生")
     
     try:
+        db.query(CourseEnrollment).filter(CourseEnrollment.student_id == student_id).delete()
         db.query(Attendance).filter(Attendance.student_id == student_id).delete()
         db.query(Score).filter(Score.student_id == student_id).delete()
         db.delete(student)
@@ -298,6 +309,7 @@ async def create_students_batch(
     errors = []
     failed_data = []
     duplicate_count = 0
+    new_students = []
     
     for i, student_data in enumerate(students_list):
         if not isinstance(student_data, dict):
@@ -368,10 +380,14 @@ async def create_students_batch(
             teacher_id=current_user.id if current_user.role == "teacher" else None
         )
         db.add(student)
+        new_students.append(student)
         results.append(student_data.get("name", ""))
         print(f"[DEBUG] 成功添加学生: {student_data.get('name')} 到班级 {class_id}", file=sys.stderr)
     
     try:
+        db.flush()
+        for student in new_students:
+            sync_student_course_enrollments(student, db)
         db.commit()
         print(f"[DEBUG] 批量导入完成 - 成功: {len(results)}, 失败: {len(errors)}, 重复: {duplicate_count}", file=sys.stderr)
     except Exception as e:

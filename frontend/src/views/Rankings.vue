@@ -1,205 +1,134 @@
 <template>
-  <div class="rankings">
+  <div class="rankings-page">
     <div class="page-header">
-      <h1 class="page-title">班级排名</h1>
       <div>
-        <el-select v-model="semester" placeholder="选择学期" @change="loadData" style="width: 150px; margin-right: 10px;">
-          <el-option label="全部" value="" />
-          <el-option label="2024-1" value="2024-1" />
-          <el-option label="2024-2" value="2024-2" />
-        </el-select>
-        <el-select v-model="examType" placeholder="考试类型" clearable @change="loadData" style="width: 150px; margin-right: 10px;">
-          <el-option label="期中考试" value="midterm" />
-          <el-option label="期末考试" value="final" />
-          <el-option label="月考" value="monthly" />
-          <el-option label="测验" value="quiz" />
+        <h1 class="page-title">班级排名</h1>
+        <p class="page-subtitle">
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看排名。' }}
+        </p>
+      </div>
+      <div class="header-actions">
+        <el-button @click="router.push('/courses')">切换课程</el-button>
+        <el-select v-model="semester" placeholder="选择学期" clearable style="width: 220px" @change="loadData">
+          <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.name" />
         </el-select>
       </div>
     </div>
 
-    <el-row :gutter="20">
-      <el-col :span="12">
-        <div class="chart-card">
-          <h3>班级平均分排名</h3>
-          <el-table :data="classRankings" style="width: 100%">
-            <el-table-column prop="rank" label="排名" width="80">
-              <template #default="{ row }">
-                <el-tag :type="getRankType(row.rank)">{{ row.rank }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="class_name" label="班级" />
-            <el-table-column prop="avg_score" label="平均分" />
-          </el-table>
-          <div ref="classChartRef" style="height: 300px; margin-top: 20px;"></div>
-        </div>
-      </el-col>
-      <el-col :span="12">
-        <div class="chart-card">
-          <h3>学生成绩排名</h3>
-          <el-select v-model="filterClassId" placeholder="选择班级" clearable @change="loadStudentRankings" style="width: 180px; margin-bottom: 10px;">
-            <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-          <el-table :data="studentRankings" style="width: 100%" max-height="400">
-            <el-table-column prop="rank" label="排名" width="80">
-              <template #default="{ row }">
-                <el-tag :type="getRankType(row.rank)">{{ row.rank }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="student_name" label="学生" />
-            <el-table-column prop="class_name" label="班级" />
-            <el-table-column prop="avg_score" label="平均分" />
-          </el-table>
-        </div>
-      </el-col>
-    </el-row>
+    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
 
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <el-col :span="24">
-        <div class="chart-card">
-          <h3>科目排名</h3>
-          <el-select v-model="selectedSubject" placeholder="选择科目" @change="loadSubjectRankings" style="width: 180px; margin-right: 10px;">
-            <el-option v-for="s in subjects" :key="s.id" :label="s.name" :value="s.id" />
-          </el-select>
-          <el-table :data="subjectRankings" style="width: 100%" max-height="300">
-            <el-table-column prop="rank" label="排名" width="80">
-              <template #default="{ row }">
-                <el-tag :type="getRankType(row.rank)">{{ row.rank }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="student_name" label="学生" />
-            <el-table-column prop="score" label="成绩" />
-            <el-table-column prop="exam_type" label="考试类型" />
-            <el-table-column prop="semester" label="学期" />
-          </el-table>
-        </div>
-      </el-col>
-    </el-row>
+    <template v-else>
+      <el-row :gutter="20">
+        <el-col :span="8">
+          <el-card shadow="never">
+            <template #header>课程班级平均分</template>
+            <el-empty v-if="!classRankings.length" description="暂无班级排名数据" />
+            <el-table v-else :data="classRankings" size="small">
+              <el-table-column prop="rank" label="排名" width="80" />
+              <el-table-column prop="class_name" label="班级" />
+              <el-table-column prop="avg_score" label="平均分" width="100" />
+            </el-table>
+          </el-card>
+        </el-col>
+        <el-col :span="16">
+          <el-card shadow="never">
+            <template #header>学生排名</template>
+            <el-empty v-if="!studentRankings.length" description="暂无学生排名数据" />
+            <el-table v-else :data="studentRankings">
+              <el-table-column prop="rank" label="排名" width="80" />
+              <el-table-column prop="student_name" label="学生" min-width="180" />
+              <el-table-column prop="class_name" label="班级" width="180" />
+              <el-table-column prop="avg_score" label="平均分" width="120" />
+            </el-table>
+          </el-card>
+        </el-col>
+      </el-row>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
-import * as echarts from 'echarts'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
 import api from '@/api'
+import { useUserStore } from '@/stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
 
 const semester = ref('')
-const examType = ref('')
-const filterClassId = ref(null)
-const selectedSubject = ref(null)
-
-const classes = ref([])
-const subjects = ref([])
+const semesters = ref([])
 const classRankings = ref([])
 const studentRankings = ref([])
-const subjectRankings = ref([])
 
-const classChartRef = ref(null)
-let classChart = null
+const selectedCourse = computed(() => userStore.selectedCourse)
 
-const getRankType = (rank) => {
-  if (rank === 1) return 'danger'
-  if (rank === 2) return 'warning'
-  if (rank === 3) return 'success'
-  return 'info'
-}
+const buildParams = () => ({
+  semester: semester.value || undefined,
+  subject_id: selectedCourse.value?.id
+})
 
-const loadClasses = async () => {
-  const data = await api.classes.list()
-  classes.value = data || []
-}
-
-const loadSubjects = async () => {
-  const data = await api.subjects.list()
-  subjects.value = data || []
-  if (subjects.value.length > 0) {
-    selectedSubject.value = subjects.value[0].id
-    loadSubjectRankings()
-  }
+const loadSemesters = async () => {
+  semesters.value = await api.semesters.list()
 }
 
 const loadData = async () => {
-  const data = await api.dashboard.getClassRankings({
-    semester: semester.value,
-    exam_type: examType.value
-  })
-  classRankings.value = (data || []).filter(r => r.class_id)
-  updateClassChart()
+  if (!selectedCourse.value) {
+    classRankings.value = []
+    studentRankings.value = []
+    return
+  }
+  const [classData, studentData] = await Promise.all([
+    api.dashboard.getClassRankings(buildParams()),
+    api.dashboard.getStudentRankings(buildParams())
+  ])
+  classRankings.value = classData || []
+  studentRankings.value = studentData || []
 }
-
-const loadStudentRankings = async () => {
-  const data = await api.dashboard.getStudentRankings({
-    class_id: filterClassId.value,
-    semester: semester.value,
-    exam_type: examType.value,
-    limit: 50
-  })
-  studentRankings.value = (data || []).filter(r => r.student_id)
-}
-
-const loadSubjectRankings = async () => {
-  if (!selectedSubject.value) return
-  const data = await api.dashboard.getSubjectRankings(selectedSubject.value, {
-    semester: semester.value,
-    exam_type: examType.value,
-    limit: 20
-  })
-  subjectRankings.value = data || []
-}
-
-const updateClassChart = () => {
-  if (!classChart || classRankings.value.length === 0) return
-  
-  const xData = classRankings.value.map(r => r.class_name)
-  const yData = classRankings.value.map(r => r.avg_score)
-  
-  classChart.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: xData },
-    yAxis: { type: 'value', min: 0, max: 100 },
-    series: [{
-      data: yData.map((v, i) => ({
-        value: v,
-        itemStyle: { color: i < 3 ? '#f56c6c' : '#409eff' }
-      })),
-      type: 'bar',
-      barWidth: '50%'
-    }]
-  })
-}
-
-watch([semester, examType], () => {
-  loadData()
-  loadStudentRankings()
-  loadSubjectRankings()
-})
 
 onMounted(async () => {
-  await Promise.all([loadClasses(), loadSubjects()])
+  await loadSemesters()
   await loadData()
-  await loadStudentRankings()
-  
-  classChart = echarts.init(classChartRef.value)
-  updateClassChart()
-  
-  window.addEventListener('resize', () => classChart?.resize())
+})
+
+watch(selectedCourse, () => {
+  loadData()
 })
 </script>
 
 <style scoped>
-.rankings {
-  padding: 20px;
+.rankings-page {
+  padding: 24px;
 }
 
-.chart-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.chart-card h3 {
-  margin-bottom: 15px;
-  color: #303133;
-  font-size: 16px;
+.page-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+  }
 }
 </style>

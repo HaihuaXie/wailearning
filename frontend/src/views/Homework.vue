@@ -1,270 +1,238 @@
 <template>
-  <div class="homework-container">
-    <el-card>
-      <template #header>
-        <div class="card-header">
-          <span><el-icon><Document /></el-icon> 作业管理</span>
-          <el-button type="primary" @click="openAddDialog" v-if="!isStudent">
-            <el-icon><Plus /></el-icon> 布置作业
-          </el-button>
-        </div>
-      </template>
-
-      <div class="filter-row">
-        <el-select v-model="filterClassId" placeholder="选择班级" clearable @change="fetchHomeworks">
-          <el-option v-for="cls in classes" :key="cls.id" :label="cls.name" :value="cls.id" />
-        </el-select>
-        <el-select v-model="filterSubjectId" placeholder="选择科目" clearable @change="fetchHomeworks">
-          <el-option v-for="sub in subjects" :key="sub.id" :label="sub.name" :value="sub.id" />
-        </el-select>
-        <el-button @click="resetFilters">重置</el-button>
+  <div class="homework-page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">作业管理</h1>
+        <p class="page-subtitle">
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看作业。' }}
+        </p>
       </div>
+      <div class="header-actions">
+        <el-button @click="router.push('/courses')">切换课程</el-button>
+        <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
+          发布作业
+        </el-button>
+      </div>
+    </div>
 
-      <el-table :data="homeworks" v-loading="loading" stripe>
-        <el-table-column prop="title" label="作业标题" min-width="150" />
-        <el-table-column prop="class_name" label="班级" width="120" />
-        <el-table-column prop="subject_name" label="科目" width="100" />
-        <el-table-column prop="due_date" label="截止日期" width="160">
-          <template #default="{ row }">
-            {{ formatDate(row.due_date) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="creator_name" label="发布人" width="100" />
-        <el-table-column prop="created_at" label="发布时间" width="160">
-          <template #default="{ row }">
-            {{ formatDate(row.created_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="150" v-if="!isStudent">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
-            <el-button size="small" type="danger" @click="deleteHomework(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
 
-      <el-pagination
-        v-if="total > 0"
-        v-model:current-page="page"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next"
-        @size-change="fetchHomeworks"
-        @current-change="fetchHomeworks"
-        style="margin-top: 20px; justify-content: center"
-      />
-    </el-card>
+    <template v-else>
+      <el-card shadow="never">
+        <el-table :data="homeworks" v-loading="loading">
+          <el-table-column prop="title" label="作业标题" min-width="200" />
+          <el-table-column prop="subject_name" label="课程" width="160" />
+          <el-table-column prop="due_date" label="截止时间" width="180">
+            <template #default="{ row }">
+              {{ formatDate(row.due_date) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="creator_name" label="发布人" width="120" />
+          <el-table-column prop="created_at" label="发布时间" width="180">
+            <template #default="{ row }">
+              {{ formatDate(row.created_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="180">
+            <template #default="{ row }">
+              <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
+              <el-button
+                v-if="!userStore.isStudent"
+                size="small"
+                type="danger"
+                @click="deleteHomework(row)"
+              >
+                删除
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </template>
 
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="600px">
-      <el-form :model="form" label-width="100px">
-        <el-form-item label="作业标题" required>
-          <el-input v-model="form.title" placeholder="请输入作业标题" />
+    <el-dialog v-model="dialogVisible" title="发布作业" width="620px" destroy-on-close>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
+        <el-form-item label="作业标题" prop="title">
+          <el-input v-model="form.title" />
         </el-form-item>
-        <el-form-item label="所属班级" required>
-          <el-select v-model="form.class_id" placeholder="请选择班级">
-            <el-option v-for="cls in classes" :key="cls.id" :label="cls.name" :value="cls.id" />
-          </el-select>
+        <el-form-item label="截止时间" prop="due_date">
+          <el-date-picker
+            v-model="form.due_date"
+            type="datetime"
+            placeholder="请选择截止时间"
+            style="width: 100%"
+          />
         </el-form-item>
-        <el-form-item label="所属科目">
-          <el-select v-model="form.subject_id" placeholder="请选择科目" clearable>
-            <el-option v-for="sub in subjects" :key="sub.id" :label="sub.name" :value="sub.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="截止日期">
-          <el-date-picker v-model="form.due_date" type="datetime" placeholder="选择截止日期" />
-        </el-form-item>
-        <el-form-item label="作业内容">
-          <el-input v-model="form.content" type="textarea" :rows="6" placeholder="请输入作业内容" />
+        <el-form-item label="作业内容" prop="content">
+          <el-input v-model="form.content" type="textarea" :rows="6" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm" :loading="submitting">{{ dialogMode === 'add' ? '发布' : '保存' }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="作业详情" width="600px">
-      <el-descriptions :column="2" border v-if="currentHomework">
-        <el-descriptions-item label="作业标题">{{ currentHomework.title }}</el-descriptions-item>
-        <el-descriptions-item label="所属班级">{{ currentHomework.class_name }}</el-descriptions-item>
-        <el-descriptions-item label="所属科目">{{ currentHomework.subject_name || '无' }}</el-descriptions-item>
-        <el-descriptions-item label="截止日期">{{ formatDate(currentHomework.due_date) }}</el-descriptions-item>
+    <el-dialog v-model="detailVisible" title="作业详情" width="620px" destroy-on-close>
+      <el-descriptions v-if="currentHomework" :column="2" border>
+        <el-descriptions-item label="作业标题" :span="2">{{ currentHomework.title }}</el-descriptions-item>
+        <el-descriptions-item label="课程">{{ currentHomework.subject_name || selectedCourse?.name }}</el-descriptions-item>
+        <el-descriptions-item label="截止时间">{{ formatDate(currentHomework.due_date) }}</el-descriptions-item>
         <el-descriptions-item label="发布人">{{ currentHomework.creator_name }}</el-descriptions-item>
         <el-descriptions-item label="发布时间">{{ formatDate(currentHomework.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '无' }}</el-descriptions-item>
+        <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
       </el-descriptions>
-      <template #footer>
-        <el-button @click="detailVisible = false">关闭</el-button>
-      </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Plus } from '@element-plus/icons-vue'
+
+import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
-api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
+const router = useRouter()
 const userStore = useUserStore()
-const isStudent = computed(() => userStore.userInfo?.role === 'student')
 
-const homeworks = ref([])
-const classes = ref([])
-const subjects = ref([])
 const loading = ref(false)
 const submitting = ref(false)
-const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-
-const filterClassId = ref(null)
-const filterSubjectId = ref(null)
-
 const dialogVisible = ref(false)
-const dialogMode = ref('add')
-const dialogTitle = computed(() => dialogMode.value === 'add' ? '布置作业' : '编辑作业')
-
 const detailVisible = ref(false)
 const currentHomework = ref(null)
+const homeworks = ref([])
+const formRef = ref(null)
 
-const form = ref({
+const selectedCourse = computed(() => userStore.selectedCourse)
+
+const form = reactive({
   title: '',
   content: '',
-  class_id: null,
-  subject_id: null,
   due_date: null
 })
 
-const fetchClasses = async () => {
-  try {
-    const res = await api.get('/classes')
-    classes.value = res.data
-  } catch (e) {
-    console.error('获取班级失败', e)
+const rules = {
+  title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }]
+}
+
+const buildParams = () => {
+  if (!selectedCourse.value) {
+    return {}
+  }
+  return {
+    class_id: selectedCourse.value.class_id,
+    subject_id: selectedCourse.value.id,
+    page: 1,
+    page_size: 200
   }
 }
 
-const fetchSubjects = async () => {
-  try {
-    const res = await api.get('/subjects')
-    subjects.value = res.data
-  } catch (e) {
-    console.error('获取科目失败', e)
+const loadHomeworks = async () => {
+  if (!selectedCourse.value) {
+    homeworks.value = []
+    return
   }
-}
-
-const fetchHomeworks = async () => {
   loading.value = true
   try {
-    const params = {
-      page: page.value,
-      page_size: pageSize.value
-    }
-    if (filterClassId.value) params.class_id = filterClassId.value
-    if (filterSubjectId.value) params.subject_id = filterSubjectId.value
-    
-    const res = await api.get('/homeworks', { params })
-    homeworks.value = res.data.data
-    total.value = res.data.total
-  } catch (e) {
-    ElMessage.error('获取作业列表失败')
+    const result = await api.homework.list(buildParams())
+    homeworks.value = result?.data || []
   } finally {
     loading.value = false
   }
 }
 
-const resetFilters = () => {
-  filterClassId.value = null
-  filterSubjectId.value = null
-  fetchHomeworks()
-}
-
-const openAddDialog = () => {
-  dialogMode.value = 'add'
-  form.value = {
-    title: '',
-    content: '',
-    class_id: null,
-    subject_id: null,
-    due_date: null
-  }
+const openCreateDialog = () => {
+  form.title = ''
+  form.content = ''
+  form.due_date = null
   dialogVisible.value = true
 }
 
 const submitForm = async () => {
-  if (!form.value.title || !form.value.class_id) {
-    ElMessage.warning('请填写标题和选择班级')
-    return
-  }
-  
+  await formRef.value.validate()
   submitting.value = true
   try {
-    const data = {
-      ...form.value,
-      due_date: form.value.due_date ? new Date(form.value.due_date).toISOString() : null
-    }
-    
-    if (dialogMode.value === 'add') {
-      await api.post('/homeworks', data)
-      ElMessage.success('作业发布成功')
-    }
-    
+    await api.homework.create({
+      title: form.title,
+      content: form.content,
+      due_date: form.due_date,
+      class_id: selectedCourse.value.class_id,
+      subject_id: selectedCourse.value.id
+    })
+    ElMessage.success('作业已发布')
     dialogVisible.value = false
-    fetchHomeworks()
-  } catch (e) {
-    ElMessage.error('操作失败：' + (e.response?.data?.detail || '未知错误'))
+    await loadHomeworks()
   } finally {
     submitting.value = false
   }
 }
 
-const viewHomework = async (row) => {
-  try {
-    const res = await api.get(`/homeworks/${row.id}`)
-    currentHomework.value = res.data
-    detailVisible.value = true
-  } catch (e) {
-    ElMessage.error('获取作业详情失败')
-  }
+const viewHomework = async row => {
+  currentHomework.value = await api.homework.get(row.id)
+  detailVisible.value = true
 }
 
-const deleteHomework = async (row) => {
+const deleteHomework = async row => {
   try {
-    await ElMessageBox.confirm('确定要删除这个作业吗？', '提示', { type: 'warning' })
-    await api.delete(`/homeworks/${row.id}`)
-    ElMessage.success('删除成功')
-    fetchHomeworks()
-  } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('删除失败')
+    await ElMessageBox.confirm(`确认删除作业“${row.title}”吗？`, '删除作业', { type: 'warning' })
+    await api.homework.delete(row.id)
+    ElMessage.success('作业已删除')
+    await loadHomeworks()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除作业失败', error)
     }
   }
 }
 
-const formatDate = (date) => {
-  if (!date) return '无'
-  return new Date(date).toLocaleString('zh-CN')
+const formatDate = value => {
+  if (!value) return '未设置'
+  return new Date(value).toLocaleString('zh-CN')
 }
 
 onMounted(() => {
-  fetchClasses()
-  fetchSubjects()
-  fetchHomeworks()
+  loadHomeworks()
+})
+
+watch(selectedCourse, () => {
+  loadHomeworks()
 })
 </script>
 
 <style scoped>
-.homework-container { padding: 20px; }
-.card-header { display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: bold; }
-.filter-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.homework-page {
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+  }
+}
 </style>

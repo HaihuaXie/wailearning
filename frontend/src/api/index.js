@@ -28,6 +28,7 @@ http.interceptors.response.use(
       if (error.response.status === 401) {
         localStorage.removeItem('token')
         localStorage.removeItem('user')
+        localStorage.removeItem('selected_course')
         window.location.href = '/login'
       }
     } else {
@@ -38,6 +39,16 @@ http.interceptors.response.use(
 )
 
 export { http, apiBaseUrl }
+
+const subjectsApi = {
+  list: params => http.get('/subjects', { params }),
+  get: id => http.get(`/subjects/${id}`),
+  create: data => http.post('/subjects', data),
+  update: (id, data) => http.put(`/subjects/${id}`, data),
+  delete: id => http.delete(`/subjects/${id}`),
+  getStudents: id => http.get(`/subjects/${id}/students`),
+  removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`)
+}
 
 const api = {
   auth: {
@@ -71,11 +82,8 @@ const api = {
         headers: { 'Content-Type': 'application/json' }
       })
   },
-  subjects: {
-    list: () => http.get('/subjects'),
-    create: data => http.post('/subjects', data),
-    delete: id => http.delete(`/subjects/${id}`)
-  },
+  subjects: subjectsApi,
+  courses: subjectsApi,
   scores: {
     list: params => http.get('/scores', { params }),
     get: id => http.get(`/scores/${id}`),
@@ -95,7 +103,15 @@ const api = {
     update: (id, data) => http.put(`/attendance/${id}`, data),
     delete: id => http.delete(`/attendance/${id}`),
     getClassStats: (classId, params) => http.get(`/attendance/statistics/class/${classId}`, { params }),
-    getStudentStats: (studentId, params) => http.get(`/attendance/statistics/student/${studentId}`, { params })
+    getStudentStats: (studentId, params) => http.get(`/attendance/statistics/student/${studentId}`, { params }),
+    batchCreate: data =>
+      http.post('/attendance/batch', JSON.stringify(data), {
+        headers: { 'Content-Type': 'application/json' }
+      }),
+    batchCreateForClass: data =>
+      http.post('/attendance/class-batch', JSON.stringify(data), {
+        headers: { 'Content-Type': 'application/json' }
+      })
   },
   dashboard: {
     getStats: params => http.get('/dashboard/stats', { params }),
@@ -104,6 +120,22 @@ const api = {
     getSubjectRankings: (subjectId, params) => http.get(`/dashboard/rankings/subjects/${subjectId}`, { params }),
     getTrends: params => http.get('/dashboard/analysis/trends', { params }),
     getSubjectAnalysis: params => http.get('/dashboard/analysis/subjects', { params })
+  },
+  homework: {
+    list: params => http.get('/homeworks', { params }),
+    get: id => http.get(`/homeworks/${id}`),
+    create: data => http.post('/homeworks', data),
+    update: (id, data) => http.put(`/homeworks/${id}`, data),
+    delete: id => http.delete(`/homeworks/${id}`)
+  },
+  notifications: {
+    list: params => http.get('/notifications', { params }),
+    get: id => http.get(`/notifications/${id}`),
+    create: data => http.post('/notifications', data),
+    update: (id, data) => http.put(`/notifications/${id}`, data),
+    delete: id => http.delete(`/notifications/${id}`),
+    markRead: id => http.post(`/notifications/${id}/read`),
+    markAllRead: params => http.post('/notifications/mark-all-read', null, { params })
   }
 }
 

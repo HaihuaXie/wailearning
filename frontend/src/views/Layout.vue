@@ -1,142 +1,69 @@
 <template>
   <el-container class="layout-container">
-    <el-aside 
-      :width="isCollapsed ? '64px' : '220px'"
-      class="sidebar"
-      :class="{ 'sidebar-collapsed': isCollapsed }"
-    >
-      <div class="logo" :class="{ 'logo-collapsed': isCollapsed }">
-        <div class="logo-content">
-          <div class="logo-icon-wrapper" v-if="userStore.systemSettings?.system_logo && !isCollapsed">
-            <img :src="userStore.systemSettings.system_logo" alt="Logo" class="header-logo" />
+    <el-aside :width="isCollapsed ? '72px' : '240px'" class="sidebar">
+      <div class="logo">
+        <div class="logo-main">
+          <div class="logo-icon">
+            <el-icon :size="22"><School /></el-icon>
           </div>
-          <el-icon v-else class="logo-icon" :size="24"><School /></el-icon>
-          <transition name="fade-slide">
-            <h2 v-if="!isCollapsed" class="logo-text">{{ userStore.systemSettings?.system_name || '班级管理' }}</h2>
-          </transition>
+          <div v-if="!isCollapsed" class="logo-texts">
+            <h2>{{ userStore.systemSettings?.system_name || 'BIMSA-CLASS' }}</h2>
+            <p>大学教学管理系统</p>
+          </div>
         </div>
         <el-button
           class="collapse-btn"
           :icon="isCollapsed ? Expand : Fold"
-          @click="toggleCollapse"
           circle
           size="small"
-          :type="isCollapsed ? 'primary' : 'info'"
+          @click="isCollapsed = !isCollapsed"
         />
       </div>
 
       <el-menu
-        :default-active="activeMenu"
+        :default-active="route.path"
         :collapse="isCollapsed"
-        :collapse-transition="true"
         router
         class="sidebar-menu"
-        :class="{ 'menu-collapsed': isCollapsed }"
       >
-        <el-menu-item index="/dashboard">
-          <el-icon><DataAnalysis /></el-icon>
-          <template #title>数据仪表盘</template>
-        </el-menu-item>
-        <el-menu-item index="/classes" v-if="userStore.isAdmin">
-          <el-icon><School /></el-icon>
-          <template #title>班级管理</template>
-        </el-menu-item>
-        <el-menu-item index="/students">
-          <el-icon><User /></el-icon>
-          <template #title>学生管理</template>
-        </el-menu-item>
-        <el-menu-item index="/scores">
-          <el-icon><Document /></el-icon>
-          <template #title>成绩管理</template>
-        </el-menu-item>
-        <el-menu-item index="/attendance">
-          <el-icon><Calendar /></el-icon>
-          <template #title>考勤管理</template>
-        </el-menu-item>
-        <el-menu-item index="/rankings">
-          <el-icon><TrendCharts /></el-icon>
-          <template #title>班级排名</template>
-        </el-menu-item>
-        <el-menu-item index="/analysis">
-          <el-icon><PieChart /></el-icon>
-          <template #title>数据分析</template>
-        </el-menu-item>
-        <el-menu-item index="/users" v-if="userStore.isAdmin">
-          <el-icon><UserFilled /></el-icon>
-          <template #title>用户管理</template>
-        </el-menu-item>
-        <el-menu-item index="/subjects" v-if="userStore.isAdmin">
-          <el-icon><Reading /></el-icon>
-          <template #title>科目管理</template>
-        </el-menu-item>
-        <el-menu-item index="/semesters" v-if="userStore.isAdmin">
-          <el-icon><Collection /></el-icon>
-          <template #title>学期管理</template>
-        </el-menu-item>
-        <el-menu-item index="/logs" v-if="userStore.isAdmin">
-          <el-icon><Clock /></el-icon>
-          <template #title>操作日志</template>
-        </el-menu-item>
-        <el-menu-item index="/points">
-          <el-icon><Coin /></el-icon>
-          <template #title>积分系统</template>
-        </el-menu-item>
-        <el-menu-item index="/homework">
-          <el-icon><Document /></el-icon>
-          <template #title>作业管理</template>
-        </el-menu-item>
-        <el-menu-item index="/notifications">
-          <el-icon><Bell /></el-icon>
-          <template #title>通知中心</template>
-        </el-menu-item>
-        <el-menu-item index="/settings" v-if="userStore.isAdmin">
-          <el-icon><Setting /></el-icon>
-          <template #title>系统设置</template>
+        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+          <el-icon><component :is="item.icon" /></el-icon>
+          <template #title>{{ item.label }}</template>
         </el-menu-item>
       </el-menu>
-
-      <div class="sidebar-footer" v-if="!isCollapsed">
-        <el-text class="version-text">v1.0.0</el-text>
-      </div>
     </el-aside>
 
     <el-container>
       <el-header class="header">
         <div class="header-left">
           <el-breadcrumb separator="/">
-            <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
+            <el-breadcrumb-item :to="{ path: '/courses' }">首页</el-breadcrumb-item>
             <el-breadcrumb-item>{{ currentRouteName }}</el-breadcrumb-item>
           </el-breadcrumb>
+          <div v-if="userStore.selectedCourse" class="course-chip">
+            <span class="course-chip-label">当前课程</span>
+            <strong>{{ userStore.selectedCourse.name }}</strong>
+            <el-tag size="small" type="primary">
+              {{ userStore.selectedCourse.course_type === 'elective' ? '选修课' : '必修课' }}
+            </el-tag>
+          </div>
         </div>
+
         <div class="header-right">
+          <el-button v-if="userStore.selectedCourse" text @click="goToCourses">切换课程</el-button>
           <el-dropdown @command="handleCommand">
-            <div class="user-info">
-              <el-avatar :size="32" class="user-avatar">
-                {{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}
-              </el-avatar>
-              <span class="username">{{ userStore.userInfo?.real_name }}</span>
-              <el-tag :type="getRoleTagType(userStore.userInfo?.role)" size="small" effect="dark">
-                {{ getRoleText(userStore.userInfo?.role) }}
-              </el-tag>
+            <div class="user-box">
+              <el-avatar :size="34">{{ userStore.userInfo?.real_name?.charAt(0) || 'U' }}</el-avatar>
+              <div v-if="!isCollapsed" class="user-meta">
+                <strong>{{ userStore.userInfo?.real_name }}</strong>
+                <span>{{ roleText(userStore.userInfo?.role) }}</span>
+              </div>
             </div>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="profile">
-                  <el-icon><User /></el-icon>
-                  个人中心
-                </el-dropdown-item>
-                <el-dropdown-item command="settings">
-                  <el-icon><Setting /></el-icon>
-                  设置
-                </el-dropdown-item>
-                <el-dropdown-item command="change-password">
-                  <el-icon><Lock /></el-icon>
-                  修改密码
-                </el-dropdown-item>
-                <el-dropdown-item command="logout" divided>
-                  <el-icon><SwitchButton /></el-icon>
-                  退出登录
-                </el-dropdown-item>
+                <el-dropdown-item command="change-password">修改密码</el-dropdown-item>
+                <el-dropdown-item command="change-course">切换课程</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -148,11 +75,7 @@
       </el-main>
 
       <el-footer class="footer">
-        <div class="footer-content">
-          <el-text class="footer-text">
-            {{ userStore.systemSettings?.copyright || '© 2024 BIMSA-CLASS' }}
-          </el-text>
-        </div>
+        {{ userStore.systemSettings?.copyright || '(c) 2026 BIMSA-CLASS' }}
       </el-footer>
 
       <el-dialog
@@ -197,7 +120,7 @@
               @keyup.enter="submitChangePassword"
             />
           </el-form-item>
-          <el-text type="info">新密码需要 8-72 个字符，保存后立即生效。</el-text>
+          <el-text type="info">新密码需要 8 到 72 个字符，保存后立即生效。</el-text>
         </el-form>
         <template #footer>
           <span>
@@ -213,31 +136,27 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-import api from '@/api'
 import { ElMessage } from 'element-plus'
 import {
-  DataAnalysis,
-  School,
-  User,
-  Document,
+  Bell,
   Calendar,
-  TrendCharts,
-  PieChart,
-  UserFilled,
-  Reading,
-  SwitchButton,
-  Collection,
-  Clock,
   Coin,
+  Collection,
+  DataAnalysis,
   Expand,
   Fold,
+  Reading,
+  School,
   Setting,
-  Bell,
-  Lock
+  TrendCharts,
+  User,
+  UserFilled
 } from '@element-plus/icons-vue'
+
+import api from '@/api'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
@@ -252,11 +171,10 @@ const passwordForm = reactive({
   confirm_password: ''
 })
 
-const activeMenu = computed(() => route.path)
-
 const currentRouteName = computed(() => {
   const routeMap = {
-    '/dashboard': '数据仪表盘',
+    '/courses': '我的课程',
+    '/dashboard': '课程仪表盘',
     '/classes': '班级管理',
     '/students': '学生管理',
     '/scores': '成绩管理',
@@ -264,52 +182,66 @@ const currentRouteName = computed(() => {
     '/rankings': '班级排名',
     '/analysis': '数据分析',
     '/users': '用户管理',
-    '/subjects': '科目管理',
+    '/subjects': '课程管理',
     '/semesters': '学期管理',
     '/logs': '操作日志',
     '/points': '积分系统',
-    '/points-display': '积分展示'
+    '/points-display': '积分展示',
+    '/settings': '系统设置',
+    '/homework': '作业管理',
+    '/notifications': '通知中心'
   }
   return routeMap[route.path] || '页面'
 })
 
-const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value
-}
+const baseMenu = [
+  { path: '/courses', label: '我的课程', icon: Reading }
+]
 
-const getRoleText = (role) => {
-  const roleMap = {
-    'admin': '管理员',
-    'class_teacher': '班主任',
-    'teacher': '任课教师'
-  }
-  return roleMap[role] || '未知角色'
-}
+const teacherMenu = [
+  { path: '/dashboard', label: '课程仪表盘', icon: DataAnalysis },
+  { path: '/students', label: '学生管理', icon: User },
+  { path: '/scores', label: '成绩管理', icon: Collection },
+  { path: '/attendance', label: '考勤管理', icon: Calendar },
+  { path: '/rankings', label: '班级排名', icon: TrendCharts },
+  { path: '/analysis', label: '数据分析', icon: DataAnalysis },
+  { path: '/points', label: '积分系统', icon: Coin },
+  { path: '/homework', label: '作业管理', icon: Reading },
+  { path: '/notifications', label: '通知中心', icon: Bell }
+]
 
-const getRoleTagType = (role) => {
-  const typeMap = {
-    'admin': 'danger',
-    'class_teacher': 'warning',
-    'teacher': 'success'
-  }
-  return typeMap[role] || 'info'
-}
+const studentMenu = [
+  { path: '/homework', label: '作业', icon: Reading },
+  { path: '/notifications', label: '通知', icon: Bell }
+]
 
-const handleCommand = (command) => {
-  switch (command) {
-    case 'profile':
-      ElMessage.info('个人中心功能开发中...')
-      break
-    case 'settings':
-      ElMessage.info('设置功能开发中...')
-      break
-    case 'change-password':
-      openChangePasswordDialog()
-      break
-    case 'logout':
-      handleLogout()
-      break
+const adminMenu = [
+  { path: '/classes', label: '班级管理', icon: School },
+  { path: '/users', label: '用户管理', icon: UserFilled },
+  { path: '/subjects', label: '课程管理', icon: Reading },
+  { path: '/semesters', label: '学期管理', icon: Collection },
+  { path: '/logs', label: '操作日志', icon: Collection },
+  { path: '/settings', label: '系统设置', icon: Setting }
+]
+
+const menuItems = computed(() => {
+  if (userStore.isStudent) {
+    return [...baseMenu, ...studentMenu]
   }
+  if (userStore.isAdmin) {
+    return [...baseMenu, ...teacherMenu, ...adminMenu]
+  }
+  return [...baseMenu, ...teacherMenu]
+})
+
+const roleText = role => {
+  const map = {
+    admin: '管理员',
+    class_teacher: '班主任',
+    teacher: '任课老师',
+    student: '学生'
+  }
+  return map[role] || '未知角色'
 }
 
 const resetPasswordForm = () => {
@@ -329,36 +261,14 @@ const closeChangePasswordDialog = () => {
 }
 
 const submitChangePassword = async () => {
-  if (passwordSubmitting.value) {
-    return
-  }
-
   if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
     ElMessage.warning('请填写完整的密码信息')
     return
   }
-
-  const passwordLength = new TextEncoder().encode(passwordForm.new_password).length
-  if (passwordLength < 8) {
-    ElMessage.warning('新密码至少需要 8 个字符')
-    return
-  }
-
-  if (passwordLength > 72) {
-    ElMessage.warning('新密码不能超过 72 个字节')
-    return
-  }
-
   if (passwordForm.new_password !== passwordForm.confirm_password) {
     ElMessage.warning('两次输入的新密码不一致')
     return
   }
-
-  if (passwordForm.current_password === passwordForm.new_password) {
-    ElMessage.warning('新密码不能与当前密码相同')
-    return
-  }
-
   passwordSubmitting.value = true
   try {
     const result = await api.auth.changePassword({ ...passwordForm })
@@ -369,243 +279,183 @@ const submitChangePassword = async () => {
   }
 }
 
-const handleLogout = () => {
-  userStore.logout()
-  router.push('/login')
+const goToCourses = () => {
+  router.push('/courses')
+}
+
+const handleCommand = command => {
+  if (command === 'change-password') {
+    openChangePasswordDialog()
+    return
+  }
+  if (command === 'change-course') {
+    goToCourses()
+    return
+  }
+  if (command === 'logout') {
+    userStore.logout()
+    router.push('/login')
+  }
 }
 </script>
 
 <style scoped>
 .layout-container {
   min-height: 100vh;
+  background: #f4f7fb;
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
-  transition: width 0.3s ease;
-  position: relative;
-  overflow-x: hidden;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
-}
-
-.sidebar-collapsed {
-  width: 64px;
+  background: linear-gradient(180deg, #0f172a 0%, #132238 100%);
+  color: #fff;
 }
 
 .logo {
-  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  background: rgba(0, 0, 0, 0.15);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 18px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.logo-collapsed {
-  justify-content: center;
-  padding: 0 8px;
-}
-
-.logo-content {
+.logo-main {
   display: flex;
   align-items: center;
-  gap: 10px;
-  overflow: hidden;
+  gap: 12px;
 }
 
 .logo-icon {
-  color: #409eff;
-  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #93c5fd;
 }
 
-.logo-text {
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
+.logo-texts h2 {
   margin: 0;
-  white-space: nowrap;
-  letter-spacing: 1px;
+  font-size: 18px;
+  color: #fff;
+}
+
+.logo-texts p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .collapse-btn {
-  flex-shrink: 0;
-  transition: all 0.3s ease;
-}
-
-.collapse-btn:hover {
-  transform: scale(1.1);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .sidebar-menu {
   border-right: none;
-  background: transparent !important;
-  margin-top: 10px;
+  background: transparent;
+  padding: 12px 8px;
 }
 
-.sidebar-menu:not(.el-menu--collapse) {
-  width: 220px;
+.sidebar-menu :deep(.el-menu-item) {
+  margin: 6px 0;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.82);
 }
 
-.sidebar-menu .el-menu-item {
-  height: 56px;
-  line-height: 56px;
-  margin: 4px 8px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  color: rgba(255, 255, 255, 0.85) !important;
-  font-weight: 500;
+.sidebar-menu :deep(.el-menu-item:hover) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
-.sidebar-menu .el-menu-item:hover {
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: white !important;
-  transform: translateX(4px);
-}
-
-.sidebar-menu .el-menu-item:hover .el-icon {
-  color: white !important;
-}
-
-.sidebar-menu .el-menu-item.is-active {
-  background: linear-gradient(90deg, #409eff 0%, #66b1ff 100%) !important;
-  color: white !important;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
-  font-weight: 600;
-}
-
-.sidebar-menu .el-menu-item.is-active .el-icon {
-  color: white !important;
-}
-
-.sidebar-menu .el-menu-item.is-active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 60%;
-  background: white;
-  border-radius: 0 4px 4px 0;
-}
-
-.sidebar-menu .el-menu-item .el-icon {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.sidebar-footer {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.15);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.version-text {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 12px;
+.sidebar-menu :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  color: #fff;
 }
 
 .header {
-  background: white;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  height: 64px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  gap: 18px;
+}
+
+.course-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.course-chip-label {
+  color: #64748b;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.user-info {
+.user-box {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
 }
 
-.user-info:hover {
-  background: #f5f7fa;
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.user-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-weight: 600;
+.user-meta strong {
+  color: #111827;
 }
 
-.username {
-  font-weight: 500;
-  color: #303133;
+.user-meta span {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .main-content {
-  background-color: #f5f7fa;
-  padding: 20px;
-  min-height: calc(100vh - 124px);
+  padding: 0;
 }
 
 .footer {
-  background: white;
-  height: 60px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid #ebeef5;
-}
-
-.footer-content {
-  text-align: center;
-}
-
-.footer-text {
-  color: #909399;
+  color: #64748b;
   font-size: 13px;
 }
 
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.3s ease;
-}
+@media (max-width: 768px) {
+  .header {
+    height: auto;
+    padding: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 
-.fade-slide-enter-from,
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-10px);
-}
-
-:deep(.el-menu--collapse .el-menu-item .el-icon) {
-  margin: 0;
-}
-
-:deep(.el-menu--collapse .el-menu-item) {
-  padding: 0 20px !important;
-  justify-content: center;
-}
-
-:deep(.el-dropdown-menu__item) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

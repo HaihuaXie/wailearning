@@ -1,98 +1,89 @@
 <template>
   <div class="dashboard">
     <div class="page-header">
-      <h1 class="page-title">数据仪表盘</h1>
-      <el-select v-model="semester" placeholder="选择学期" @change="loadStats" style="width: 200px">
-        <el-option label="全部" value="" />
-        <el-option v-for="s in semesters" :key="s.value" :label="s.label" :value="s.value" />
+      <div>
+        <h1 class="page-title">课程仪表盘</h1>
+        <p class="page-subtitle">
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先从“我的课程”中选择一门课程。' }}
+        </p>
+      </div>
+      <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
+        <el-option label="全部学期" value="" />
+        <el-option v-for="item in semesters" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
     </div>
 
-    <el-row :gutter="20" class="stats-row">
-      <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #409eff;">
-            <el-icon :size="30"><User /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.total_students }}</div>
-            <div class="stat-label">学生总数</div>
-          </div>
-        </div>
-      </el-col>
-      <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #67c23a;">
-            <el-icon :size="30"><School /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.total_classes }}</div>
-            <div class="stat-label">班级数量</div>
-          </div>
-        </div>
-      </el-col>
-      <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #e6a23c;">
-            <el-icon :size="30"><Document /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.total_scores }}</div>
-            <div class="stat-label">成绩记录</div>
-          </div>
-        </div>
-      </el-col>
-      <el-col :span="6">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: #f56c6c;">
-            <el-icon :size="30"><Clock /></el-icon>
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ stats.attendance_rate }}%</div>
-            <div class="stat-label">考勤率</div>
-          </div>
-        </div>
-      </el-col>
-    </el-row>
+    <el-empty
+      v-if="!selectedCourse && !userStore.isAdmin"
+      description="请选择课程后查看课程仪表盘。"
+    />
 
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <el-col :span="12">
-        <div class="chart-card">
-          <h3>平均成绩: {{ stats.avg_score }}分</h3>
-          <div ref="scoreChartRef" style="height: 300px;"></div>
-        </div>
-      </el-col>
-      <el-col :span="12">
-        <div class="chart-card">
-          <h3>最近成绩记录</h3>
-          <el-table :data="stats.recent_scores" style="width: 100%" max-height="300">
-            <el-table-column prop="student_name" label="学生" />
-            <el-table-column prop="subject_name" label="科目" />
-            <el-table-column prop="score" label="成绩" width="80" />
-            <el-table-column prop="exam_type" label="考试类型" width="100" />
-          </el-table>
-        </div>
-      </el-col>
-    </el-row>
+    <template v-else>
+      <el-row :gutter="20" class="stats-row">
+        <el-col :span="6" v-for="card in statCards" :key="card.label">
+          <div class="stat-card">
+            <div class="stat-icon" :style="{ background: card.color }">
+              <el-icon :size="28"><component :is="card.icon" /></el-icon>
+            </div>
+            <div class="stat-content">
+              <div class="stat-value">{{ card.value }}</div>
+              <div class="stat-label">{{ card.label }}</div>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <el-col :span="24">
-        <div class="chart-card">
-          <h3>班级平均成绩排名</h3>
-          <div ref="rankingChartRef" style="height: 300px;"></div>
-        </div>
-      </el-col>
-    </el-row>
+      <el-row :gutter="20" class="charts-row">
+        <el-col :span="12">
+          <div class="chart-card">
+            <h3>平均成绩</h3>
+            <div ref="scoreChartRef" class="chart-box"></div>
+          </div>
+        </el-col>
+        <el-col :span="12">
+          <div class="chart-card">
+            <h3>最近成绩</h3>
+            <el-table :data="stats.recent_scores" max-height="320">
+              <el-table-column prop="student_name" label="学生" />
+              <el-table-column prop="subject_name" label="课程" />
+              <el-table-column prop="score" label="成绩" width="90" />
+              <el-table-column prop="exam_type" label="考试类型" width="120" />
+            </el-table>
+          </div>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="20" class="charts-row">
+        <el-col :span="24">
+          <div class="chart-card">
+            <h3>班级平均成绩排名</h3>
+            <div ref="rankingChartRef" class="chart-box"></div>
+          </div>
+        </el-col>
+      </el-row>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import { Clock, Collection, School, User } from '@element-plus/icons-vue'
+
 import api from '@/api'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const selectedCourse = computed(() => userStore.selectedCourse)
 
 const semester = ref('')
 const semesters = ref([])
+const scoreChartRef = ref(null)
+const rankingChartRef = ref(null)
+
+let scoreChart = null
+let rankingChart = null
+
 const stats = reactive({
   total_students: 0,
   total_classes: 0,
@@ -103,47 +94,33 @@ const stats = reactive({
   class_rankings: []
 })
 
-const scoreChartRef = ref(null)
-const rankingChartRef = ref(null)
-let scoreChart = null
-let rankingChart = null
+const statCards = computed(() => [
+  { label: '学生总数', value: stats.total_students, color: '#2563eb', icon: User },
+  { label: '关联班级', value: stats.total_classes, color: '#16a34a', icon: School },
+  { label: '成绩记录', value: stats.total_scores, color: '#d97706', icon: Collection },
+  { label: '考勤率', value: `${stats.attendance_rate}%`, color: '#dc2626', icon: Clock }
+])
+
+const buildQuery = () => ({
+  semester: semester.value || undefined,
+  subject_id: selectedCourse.value?.id
+})
 
 const loadSemesters = async () => {
-  try {
-    const data = await api.semesters.list()
-    semesters.value = (data || []).map(s => ({
-      label: s.name,
-      value: s.name
-    }))
-    if (semesters.value.length > 0 && !semester.value) {
-      semester.value = semesters.value[0].value
-    }
-  } catch (e) {
-    console.error('加载学期失败', e)
-    semesters.value = []
-  }
+  const data = await api.semesters.list()
+  semesters.value = (data || []).map(item => ({
+    label: item.name,
+    value: item.name
+  }))
 }
 
 const loadStats = async () => {
-  try {
-    const data = await api.dashboard.getStats({ semester: semester.value || undefined })
-    if (data) {
-      Object.assign(stats, data)
-      updateCharts()
-    }
-  } catch (e) {
-    console.error('加载统计数据失败', e)
-  }
+  const data = await api.dashboard.getStats(buildQuery())
+  Object.assign(stats, data || {})
 }
 
 const loadRankings = async () => {
-  try {
-    const data = await api.dashboard.getClassRankings({ semester: semester.value || undefined })
-    stats.class_rankings = (data || []).filter(r => r.class_id)
-    updateRankingChart()
-  } catch (e) {
-    console.error('加载排名失败', e)
-  }
+  stats.class_rankings = await api.dashboard.getClassRankings(buildQuery())
 }
 
 const updateCharts = () => {
@@ -158,127 +135,146 @@ const updateCharts = () => {
         splitNumber: 8,
         axisLine: {
           lineStyle: {
-            width: 6,
+            width: 8,
             color: [
-              [0.3, '#67e0e3'],
-              [0.7, '#37a2da'],
-              [1, '#fd666d']
+              [0.4, '#67e8f9'],
+              [0.7, '#38bdf8'],
+              [1, '#2563eb']
             ]
           }
         },
-        pointer: {
-          itemStyle: { color: 'auto' }
-        },
+        pointer: { itemStyle: { color: '#1d4ed8' } },
         axisTick: { show: false },
-        splitLine: { length: 10, lineStyle: { width: 2, color: '#999' } },
-        axisLabel: { color: '#999', fontSize: 12 },
+        splitLine: { length: 12, lineStyle: { width: 2, color: '#94a3b8' } },
+        axisLabel: { color: '#64748b' },
         detail: {
           valueAnimation: true,
-          formatter: '{value}分',
-          color: 'auto',
-          fontSize: 24
+          formatter: '{value} 分',
+          color: '#0f172a',
+          fontSize: 26
         },
-        data: [{ value: stats.avg_score }]
+        data: [{ value: stats.avg_score || 0 }]
+      }]
+    })
+  }
+
+  if (rankingChart) {
+    rankingChart.setOption({
+      tooltip: { trigger: 'axis' },
+      xAxis: {
+        type: 'category',
+        data: (stats.class_rankings || []).map(item => item.class_name)
+      },
+      yAxis: { type: 'value', min: 0, max: 100 },
+      series: [{
+        data: (stats.class_rankings || []).map(item => item.avg_score),
+        type: 'bar',
+        itemStyle: {
+          color: '#2563eb',
+          borderRadius: [8, 8, 0, 0]
+        }
       }]
     })
   }
 }
 
-const updateRankingChart = () => {
-  if (rankingChart && stats.class_rankings.length > 0) {
-    const xData = stats.class_rankings.map(r => r.class_name)
-    const yData = stats.class_rankings.map(r => r.avg_score)
-    
-    rankingChart.setOption({
-      tooltip: { trigger: 'axis' },
-      xAxis: { type: 'category', data: xData },
-      yAxis: { type: 'value', min: 0, max: 100 },
-      series: [{
-        data: yData,
-        type: 'bar',
-        itemStyle: { color: '#409eff' }
-      }]
-    })
-  }
+const loadAll = async () => {
+  await Promise.all([loadStats(), loadRankings()])
+  updateCharts()
 }
 
 onMounted(async () => {
-  try {
-    await loadSemesters()
-    await loadStats()
-    await loadRankings()
-    
-    scoreChart = echarts.init(scoreChartRef.value)
-    rankingChart = echarts.init(rankingChartRef.value)
-    
-    updateCharts()
-    updateRankingChart()
-    
-    window.addEventListener('resize', () => {
-      scoreChart?.resize()
-      rankingChart?.resize()
-    })
-  } catch (e) {
-    console.error('Dashboard初始化失败', e)
-  }
+  await loadSemesters()
+  scoreChart = echarts.init(scoreChartRef.value)
+  rankingChart = echarts.init(rankingChartRef.value)
+  await loadAll()
+  window.addEventListener('resize', () => {
+    scoreChart?.resize()
+    rankingChart?.resize()
+  })
+})
+
+watch(selectedCourse, async () => {
+  await loadAll()
 })
 </script>
 
 <style scoped>
 .dashboard {
-  padding: 20px;
+  padding: 24px;
 }
 
-.stats-row {
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: #64748b;
+}
+
+.stats-row,
+.charts-row {
   margin-top: 20px;
 }
 
+.stat-card,
+.chart-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
 .stat-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  gap: 18px;
 }
 
 .stat-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 12px;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-}
-
-.stat-content {
-  flex: 1;
+  color: #fff;
 }
 
 .stat-value {
   font-size: 28px;
-  font-weight: bold;
-  color: #303133;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .stat-label {
-  font-size: 14px;
-  color: #909399;
-  margin-top: 5px;
-}
-
-.chart-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  color: #64748b;
+  margin-top: 6px;
 }
 
 .chart-card h3 {
-  margin-bottom: 15px;
-  color: #303133;
-  font-size: 16px;
+  margin: 0 0 16px;
+  color: #0f172a;
+}
+
+.chart-box {
+  height: 320px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+  }
 }
 </style>

@@ -1,16 +1,21 @@
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, field_validator, model_validator
+
 
 class UserRole(str, Enum):
     ADMIN = "admin"
     CLASS_TEACHER = "class_teacher"
     TEACHER = "teacher"
+    STUDENT = "student"
+
 
 class Gender(str, Enum):
     MALE = "male"
     FEMALE = "female"
+
 
 class AttendanceStatus(str, Enum):
     PRESENT = "present"
@@ -18,21 +23,24 @@ class AttendanceStatus(str, Enum):
     LATE = "late"
     LEAVE = "leave"
 
+
 class UserBase(BaseModel):
     username: str
     real_name: str
-    role: str = "teacher"
+    role: str = UserRole.TEACHER.value
     class_id: Optional[int] = None
-    
-    @field_validator('role', mode='before')
+
+    @field_validator("role", mode="before")
     @classmethod
-    def convert_role(cls, v):
-        if isinstance(v, UserRole):
-            return v.value
-        return v
+    def convert_role(cls, value):
+        if isinstance(value, UserRole):
+            return value.value
+        return value
+
 
 class UserCreate(UserBase):
     password: str
+
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -40,6 +48,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     class_id: Optional[int] = None
     is_active: Optional[bool] = None
+
 
 class UserResponse(UserBase):
     id: int
@@ -50,50 +59,58 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 class TokenData(BaseModel):
     username: Optional[str] = None
 
+
 class MessageResponse(BaseModel):
     message: str
+
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
     confirm_password: str
 
-    @field_validator('new_password')
+    @field_validator("new_password")
     @classmethod
     def validate_new_password(cls, value: str) -> str:
-        encoded = value.encode('utf-8')
+        encoded = value.encode("utf-8")
         if len(encoded) < 8:
-            raise ValueError('New password must be at least 8 characters.')
+            raise ValueError("New password must be at least 8 characters.")
         if len(encoded) > 72:
-            raise ValueError('New password must be 72 bytes or fewer.')
+            raise ValueError("New password must be 72 bytes or fewer.")
         return value
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_password_confirmation(self):
         if self.new_password != self.confirm_password:
-            raise ValueError('Password confirmation does not match.')
+            raise ValueError("Password confirmation does not match.")
         if self.current_password == self.new_password:
-            raise ValueError('New password must be different from current password.')
+            raise ValueError("New password must be different from current password.")
         return self
+
 
 class ClassCreate(BaseModel):
     name: str
     grade: int
 
+
 class ClassUpdate(BaseModel):
     name: Optional[str] = None
     grade: Optional[int] = None
+
 
 class ClassResponse(BaseModel):
     id: int
@@ -105,6 +122,7 @@ class ClassResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class StudentBase(BaseModel):
     name: str
     student_no: str
@@ -114,8 +132,10 @@ class StudentBase(BaseModel):
     address: Optional[str] = None
     class_id: int
 
+
 class StudentCreate(StudentBase):
     pass
+
 
 class StudentUpdate(BaseModel):
     name: Optional[str] = None
@@ -125,6 +145,7 @@ class StudentUpdate(BaseModel):
     parent_phone: Optional[str] = None
     address: Optional[str] = None
     class_id: Optional[int] = None
+
 
 class StudentResponse(StudentBase):
     id: int
@@ -136,35 +157,76 @@ class StudentResponse(StudentBase):
     class Config:
         from_attributes = True
 
+
 class StudentListResponse(BaseModel):
     total: int
     data: List[StudentResponse]
 
+
 class SubjectCreate(BaseModel):
     name: str
     teacher_id: Optional[int] = None
+    class_id: int
+    course_type: str = "required"
+    status: str = "active"
+    semester: Optional[str] = None
+    description: Optional[str] = None
+
 
 class SubjectUpdate(BaseModel):
     name: Optional[str] = None
     teacher_id: Optional[int] = None
+    class_id: Optional[int] = None
+    course_type: Optional[str] = None
+    status: Optional[str] = None
+    semester: Optional[str] = None
+    description: Optional[str] = None
+
 
 class SubjectResponse(BaseModel):
     id: int
     name: str
     teacher_id: Optional[int] = None
+    class_id: Optional[int] = None
+    course_type: str = "required"
+    status: str = "active"
+    semester: Optional[str] = None
+    description: Optional[str] = None
+    teacher_name: Optional[str] = None
+    class_name: Optional[str] = None
+    student_count: int = 0
+    created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class CourseEnrollmentResponse(BaseModel):
+    id: int
+    subject_id: int
+    student_id: int
+    class_id: int
+    can_remove: bool
+    created_at: datetime
+    student_name: Optional[str] = None
+    student_no: Optional[str] = None
+    class_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 
 class SemesterCreate(BaseModel):
     name: str
     year: int
     is_current: bool = False
 
+
 class SemesterUpdate(BaseModel):
     name: Optional[str] = None
     year: Optional[int] = None
     is_current: Optional[bool] = None
+
 
 class SemesterResponse(BaseModel):
     id: int
@@ -176,6 +238,7 @@ class SemesterResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ScoreBase(BaseModel):
     student_id: int
     subject_id: int
@@ -185,13 +248,17 @@ class ScoreBase(BaseModel):
     score: float
     exam_date: Optional[str] = None
 
+
 class ScoreCreate(ScoreBase):
     pass
+
 
 class ScoreUpdate(BaseModel):
     score: Optional[float] = None
     exam_type: Optional[str] = None
     exam_date: Optional[str] = None
+    semester: Optional[str] = None
+
 
 class ScoreResponse(ScoreBase):
     id: int
@@ -199,46 +266,58 @@ class ScoreResponse(ScoreBase):
     subject_name: Optional[str] = None
     class_name: Optional[str] = None
     exam_date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
 
 class ScoreListResponse(BaseModel):
     total: int
     data: List[ScoreResponse]
 
+
 class AttendanceBase(BaseModel):
     student_id: int
     class_id: int
+    subject_id: Optional[int] = None
     date: str
     status: AttendanceStatus
     remark: Optional[str] = None
 
+
 class AttendanceCreate(AttendanceBase):
     pass
+
 
 class AttendanceUpdate(BaseModel):
     status: Optional[AttendanceStatus] = None
     remark: Optional[str] = None
 
+
 class AttendanceResponse(AttendanceBase):
     id: int
     student_name: Optional[str] = None
     class_name: Optional[str] = None
+    subject_name: Optional[str] = None
     date: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
+
 class AttendanceListResponse(BaseModel):
     total: int
     data: List[AttendanceResponse]
+
 
 class ClassRanking(BaseModel):
     class_id: int
     class_name: str
     avg_score: float
     rank: int
+
 
 class DashboardStats(BaseModel):
     total_students: int
@@ -249,12 +328,14 @@ class DashboardStats(BaseModel):
     recent_scores: List[ScoreResponse] = []
     class_rankings: List[ClassRanking] = []
 
+
 class StudentRanking(BaseModel):
     student_id: int
     student_name: str
     class_name: str
     avg_score: float
     rank: int
+
 
 class OperationLogResponse(BaseModel):
     id: int
@@ -273,9 +354,11 @@ class OperationLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class OperationLogListResponse(BaseModel):
     total: int
     data: List[OperationLogResponse]
+
 
 class PointRuleBase(BaseModel):
     name: str
@@ -285,8 +368,10 @@ class PointRuleBase(BaseModel):
     condition_type: str
     condition_value: Optional[str] = None
 
+
 class PointRuleCreate(PointRuleBase):
     pass
+
 
 class PointRuleUpdate(BaseModel):
     name: Optional[str] = None
@@ -297,6 +382,7 @@ class PointRuleUpdate(BaseModel):
     condition_value: Optional[str] = None
     is_active: Optional[bool] = None
 
+
 class PointRuleResponse(PointRuleBase):
     id: int
     is_active: bool
@@ -304,6 +390,7 @@ class PointRuleResponse(PointRuleBase):
 
     class Config:
         from_attributes = True
+
 
 class StudentPointResponse(BaseModel):
     id: int
@@ -317,6 +404,7 @@ class StudentPointResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class PointRecordResponse(BaseModel):
     id: int
@@ -333,9 +421,11 @@ class PointRecordResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class PointRecordListResponse(BaseModel):
     total: int
     data: List[PointRecordResponse]
+
 
 class PointItemBase(BaseModel):
     name: str
@@ -345,8 +435,10 @@ class PointItemBase(BaseModel):
     stock: int = -1
     image_url: Optional[str] = None
 
+
 class PointItemCreate(PointItemBase):
     pass
+
 
 class PointItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -357,6 +449,7 @@ class PointItemUpdate(BaseModel):
     image_url: Optional[str] = None
     is_active: Optional[bool] = None
 
+
 class PointItemResponse(PointItemBase):
     id: int
     is_active: bool
@@ -364,6 +457,7 @@ class PointItemResponse(PointItemBase):
 
     class Config:
         from_attributes = True
+
 
 class PointExchangeResponse(BaseModel):
     id: int
@@ -382,9 +476,11 @@ class PointExchangeResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class PointExchangeListResponse(BaseModel):
     total: int
     data: List[PointExchangeResponse]
+
 
 class PointAddRequest(BaseModel):
     student_id: int
@@ -394,10 +490,12 @@ class PointAddRequest(BaseModel):
     source_id: Optional[int] = None
     rule_id: Optional[int] = None
 
+
 class PointExchangeRequest(BaseModel):
     item_id: int
     quantity: int = 1
     student_id: Optional[int] = None
+
 
 class PointRankingResponse(BaseModel):
     student_id: int
@@ -406,12 +504,14 @@ class PointRankingResponse(BaseModel):
     total_points: int
     rank: int
 
+
 class PointStatsResponse(BaseModel):
     total_students: int
     active_students: int
     total_points_distributed: int
     total_points_exchanged: int
     top_students: List[PointRankingResponse]
+
 
 class SystemSettingResponse(BaseModel):
     id: int
@@ -424,8 +524,10 @@ class SystemSettingResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class SystemSettingUpdate(BaseModel):
     setting_value: str
+
 
 class SystemSettingsResponse(BaseModel):
     system_name: str
@@ -443,14 +545,17 @@ class HomeworkBase(BaseModel):
     subject_id: Optional[int] = None
     due_date: Optional[datetime] = None
 
+
 class HomeworkCreate(HomeworkBase):
     pass
+
 
 class HomeworkUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     subject_id: Optional[int] = None
     due_date: Optional[datetime] = None
+
 
 class HomeworkResponse(HomeworkBase):
     id: int
@@ -464,6 +569,7 @@ class HomeworkResponse(HomeworkBase):
     class Config:
         from_attributes = True
 
+
 class HomeworkListResponse(BaseModel):
     total: int
     data: List[HomeworkResponse]
@@ -475,9 +581,12 @@ class NotificationBase(BaseModel):
     priority: str = "normal"
     is_pinned: bool = False
     class_id: Optional[int] = None
+    subject_id: Optional[int] = None
+
 
 class NotificationCreate(NotificationBase):
     pass
+
 
 class NotificationUpdate(BaseModel):
     title: Optional[str] = None
@@ -485,6 +594,8 @@ class NotificationUpdate(BaseModel):
     priority: Optional[str] = None
     is_pinned: Optional[bool] = None
     class_id: Optional[int] = None
+    subject_id: Optional[int] = None
+
 
 class NotificationResponse(NotificationBase):
     id: int
@@ -493,10 +604,12 @@ class NotificationResponse(NotificationBase):
     updated_at: datetime
     creator_name: Optional[str] = None
     class_name: Optional[str] = None
+    subject_name: Optional[str] = None
     is_read: Optional[bool] = False
 
     class Config:
         from_attributes = True
+
 
 class NotificationListResponse(BaseModel):
     total: int

@@ -1,23 +1,40 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Enum as SQLEnum, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum as SQLEnum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+
 from app.database import Base
+
 import enum
+
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
-    CLASS_TEACHER = "class_teacher"  # 班主任
-    TEACHER = "teacher"  # 任课教师
+    CLASS_TEACHER = "class_teacher"
+    TEACHER = "teacher"
+    STUDENT = "student"
+
 
 class Gender(str, enum.Enum):
     MALE = "male"
     FEMALE = "female"
+
 
 class AttendanceStatus(str, enum.Enum):
     PRESENT = "present"
     ABSENT = "absent"
     LATE = "late"
     LEAVE = "leave"
+
 
 class User(Base):
     __tablename__ = "users"
@@ -26,13 +43,15 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     real_name = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="teacher")
+    role = Column(String, nullable=False, default=UserRole.TEACHER.value)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     class_obj = relationship("Class", back_populates="teachers")
     students = relationship("Student", back_populates="teacher")
+    courses = relationship("Subject", back_populates="teacher")
+
 
 class Class(Base):
     __tablename__ = "classes"
@@ -46,6 +65,8 @@ class Class(Base):
     students = relationship("Student", back_populates="class_obj")
     scores = relationship("Score", back_populates="class_obj")
     attendances = relationship("Attendance", back_populates="class_obj")
+    courses = relationship("Subject", back_populates="class_obj")
+
 
 class Student(Base):
     __tablename__ = "students"
@@ -64,22 +85,56 @@ class Student(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint('class_id', 'student_no', name='uq_student_class_no'),
+        UniqueConstraint("class_id", "student_no", name="uq_student_class_no"),
     )
 
     class_obj = relationship("Class", back_populates="students")
     teacher = relationship("User", back_populates="students")
     scores = relationship("Score", back_populates="student")
     attendances = relationship("Attendance", back_populates="student")
+    course_enrollments = relationship("CourseEnrollment", back_populates="student")
+
 
 class Subject(Base):
     __tablename__ = "subjects"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    course_type = Column(String, nullable=False, default="required")
+    status = Column(String, nullable=False, default="active")
+    semester = Column(String, nullable=True)
+    description = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    teacher = relationship("User", back_populates="courses")
+    class_obj = relationship("Class", back_populates="courses")
     scores = relationship("Score", back_populates="subject")
+    homeworks = relationship("Homework", back_populates="subject")
+    attendances = relationship("Attendance", back_populates="subject")
+    notifications = relationship("Notification", back_populates="subject")
+    enrollments = relationship("CourseEnrollment", back_populates="course")
+
+
+class CourseEnrollment(Base):
+    __tablename__ = "course_enrollments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    can_remove = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("subject_id", "student_id", name="uq_course_enrollment"),
+    )
+
+    course = relationship("Subject", back_populates="enrollments")
+    student = relationship("Student", back_populates="course_enrollments")
+    class_obj = relationship("Class")
+
 
 class Score(Base):
     __tablename__ = "scores"
@@ -98,12 +153,14 @@ class Score(Base):
     subject = relationship("Subject", back_populates="scores")
     class_obj = relationship("Class", back_populates="scores")
 
+
 class Attendance(Base):
     __tablename__ = "attendances"
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     date = Column(DateTime(timezone=True), nullable=False)
     status = Column(SQLEnum(AttendanceStatus), default=AttendanceStatus.PRESENT)
     remark = Column(String, nullable=True)
@@ -111,6 +168,8 @@ class Attendance(Base):
 
     student = relationship("Student", back_populates="attendances")
     class_obj = relationship("Class", back_populates="attendances")
+    subject = relationship("Subject", back_populates="attendances")
+
 
 class Semester(Base):
     __tablename__ = "semesters"
@@ -120,6 +179,7 @@ class Semester(Base):
     year = Column(Integer, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class OperationLog(Base):
     __tablename__ = "operation_logs"
@@ -137,8 +197,8 @@ class OperationLog(Base):
     result = Column(String, default="success")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
 class PointRule(Base):
-    """积分规则配置"""
     __tablename__ = "point_rules"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -152,8 +212,8 @@ class PointRule(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+
 class StudentPoint(Base):
-    """学生积分账户"""
     __tablename__ = "student_points"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -166,8 +226,8 @@ class StudentPoint(Base):
 
     student = relationship("Student", backref="point_account")
 
+
 class PointRecord(Base):
-    """积分变动记录"""
     __tablename__ = "point_records"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -185,8 +245,8 @@ class PointRecord(Base):
     rule = relationship("PointRule", backref="records")
     operator = relationship("User", backref="point_operations")
 
+
 class PointItem(Base):
-    """积分商品"""
     __tablename__ = "point_items"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -200,8 +260,8 @@ class PointItem(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+
 class PointExchange(Base):
-    """积分兑换记录"""
     __tablename__ = "point_exchanges"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -221,7 +281,6 @@ class PointExchange(Base):
 
 
 class SystemSetting(Base):
-    """系统设置"""
     __tablename__ = "system_settings"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -233,7 +292,6 @@ class SystemSetting(Base):
 
 
 class Homework(Base):
-    """作业"""
     __tablename__ = "homeworks"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -247,12 +305,11 @@ class Homework(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     class_obj = relationship("Class", backref="homeworks")
-    subject = relationship("Subject", backref="homeworks")
+    subject = relationship("Subject", back_populates="homeworks")
     creator = relationship("User", backref="homeworks")
 
 
 class Notification(Base):
-    """通知"""
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -261,16 +318,17 @@ class Notification(Base):
     priority = Column(String, default="normal")
     is_pinned = Column(Boolean, default=False)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     creator = relationship("User", backref="notifications")
     class_obj = relationship("Class", backref="notifications")
+    subject = relationship("Subject", back_populates="notifications")
 
 
 class NotificationRead(Base):
-    """通知阅读记录"""
     __tablename__ = "notification_reads"
 
     id = Column(Integer, primary_key=True, index=True)

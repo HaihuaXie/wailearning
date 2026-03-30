@@ -1,195 +1,169 @@
 <template>
-  <div class="analysis">
+  <div class="analysis-page">
     <div class="page-header">
-      <h1 class="page-title">数据分析</h1>
-      <el-select v-model="semester" placeholder="选择学期" @change="loadData" style="width: 150px;">
-        <el-option label="全部" value="" />
-        <el-option label="2024-1" value="2024-1" />
-        <el-option label="2024-2" value="2024-2" />
-      </el-select>
+      <div>
+        <h1 class="page-title">数据分析</h1>
+        <p class="page-subtitle">
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看数据分析。' }}
+        </p>
+      </div>
+      <div class="header-actions">
+        <el-button @click="router.push('/courses')">切换课程</el-button>
+        <el-select v-model="semester" placeholder="选择学期" clearable style="width: 220px" @change="loadData">
+          <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.name" />
+        </el-select>
+      </div>
     </div>
 
-    <el-row :gutter="20">
-      <el-col :span="12">
-        <div class="chart-card">
-          <h3>各科目平均成绩</h3>
-          <div ref="subjectChartRef" style="height: 350px;"></div>
-        </div>
-      </el-col>
-      <el-col :span="12">
-        <div class="chart-card">
-          <h3>成绩分布</h3>
-          <div ref="distributionChartRef" style="height: 350px;"></div>
-        </div>
-      </el-col>
-    </el-row>
+    <el-empty v-if="!selectedCourse" description="请先从“我的课程”中选择一门课程。" />
 
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <el-col :span="24">
-        <div class="chart-card">
-          <h3>科目成绩详情</h3>
-          <el-table :data="subjectAnalysis" style="width: 100%">
-            <el-table-column prop="subject_name" label="科目" />
-            <el-table-column prop="avg_score" label="平均分" />
-            <el-table-column prop="max_score" label="最高分" />
-            <el-table-column prop="min_score" label="最低分" />
-            <el-table-column prop="count" label="考试人数" />
-          </el-table>
-        </div>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="20" style="margin-top: 20px;">
-      <el-col :span="24">
-        <div class="chart-card">
-          <h3>考试类型趋势</h3>
-          <div ref="trendChartRef" style="height: 350px;"></div>
-        </div>
-      </el-col>
-    </el-row>
+    <template v-else>
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <el-card shadow="never">
+            <template #header>考试类型趋势</template>
+            <div ref="trendChartRef" class="chart-box"></div>
+          </el-card>
+        </el-col>
+        <el-col :span="12">
+          <el-card shadow="never">
+            <template #header>课程成绩摘要</template>
+            <el-table :data="subjectAnalysis">
+              <el-table-column prop="subject_name" label="课程" />
+              <el-table-column prop="avg_score" label="平均分" width="120" />
+              <el-table-column prop="max_score" label="最高分" width="120" />
+              <el-table-column prop="min_score" label="最低分" width="120" />
+              <el-table-column prop="count" label="记录数" width="120" />
+            </el-table>
+          </el-card>
+        </el-col>
+      </el-row>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
+
 import api from '@/api'
+import { useUserStore } from '@/stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
 
 const semester = ref('')
+const semesters = ref([])
 const subjectAnalysis = ref([])
-const trends = ref({})
-
-const subjectChartRef = ref(null)
-const distributionChartRef = ref(null)
 const trendChartRef = ref(null)
-let subjectChart = null
-let distributionChart = null
 let trendChart = null
 
+const selectedCourse = computed(() => userStore.selectedCourse)
+
+const buildParams = () => ({
+  semester: semester.value || undefined,
+  subject_id: selectedCourse.value?.id
+})
+
+const loadSemesters = async () => {
+  semesters.value = await api.semesters.list()
+}
+
 const loadData = async () => {
-  const analysisData = await api.dashboard.getSubjectAnalysis({ semester: semester.value })
-  subjectAnalysis.value = analysisData || []
-  updateSubjectChart()
-  updateDistributionChart()
-  
-  const trendData = await api.dashboard.getTrends({ semester: semester.value })
-  trends.value = trendData || {}
-  updateTrendChart()
+  if (!selectedCourse.value) {
+    subjectAnalysis.value = []
+    updateTrendChart({})
+    return
+  }
+  const [trends, analysis] = await Promise.all([
+    api.dashboard.getTrends(buildParams()),
+    api.dashboard.getSubjectAnalysis(buildParams())
+  ])
+  subjectAnalysis.value = analysis || []
+  updateTrendChart(trends || {})
 }
 
-const updateSubjectChart = () => {
-  if (!subjectChart || subjectAnalysis.value.length === 0) return
-  
-  const data = subjectAnalysis.value.map(s => ({
-    name: s.subject_name,
-    value: s.avg_score
-  }))
-  
-  subjectChart.setOption({
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      data: data,
-      label: {
-        formatter: '{b}: {c}分'
-      }
-    }]
-  })
-}
-
-const updateDistributionChart = () => {
-  if (!distributionChart || subjectAnalysis.value.length === 0) return
-  
-  const subjects = subjectAnalysis.value.map(s => s.subject_name)
-  const maxScores = subjectAnalysis.value.map(s => s.max_score)
-  const minScores = subjectAnalysis.value.map(s => s.min_score)
-  const avgScores = subjectAnalysis.value.map(s => s.avg_score)
-  
-  distributionChart.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['最高分', '平均分', '最低分'] },
-    xAxis: { type: 'category', data: subjects },
-    yAxis: { type: 'value', min: 0, max: 100 },
-    series: [
-      { name: '最高分', type: 'bar', data: maxScores, itemStyle: { color: '#67c23a' } },
-      { name: '平均分', type: 'bar', data: avgScores, itemStyle: { color: '#409eff' } },
-      { name: '最低分', type: 'bar', data: minScores, itemStyle: { color: '#f56c6c' } }
-    ]
-  })
-}
-
-const updateTrendChart = () => {
-  if (!trendChart || Object.keys(trends.value).length === 0) return
-  
-  const examTypes = Object.keys(trends.value)
-  const avgs = examTypes.map(t => trends.value[t].avg)
-  
+const updateTrendChart = data => {
+  if (!trendChart) return
+  const examTypes = Object.keys(data)
   trendChart.setOption({
     tooltip: { trigger: 'axis' },
-    xAxis: { 
-      type: 'category', 
-      data: examTypes.map(t => {
-        const map = { midterm: '期中', final: '期末', monthly: '月考', quiz: '测验' }
-        return map[t] || t
-      }) 
+    xAxis: {
+      type: 'category',
+      data: examTypes
     },
-    yAxis: { type: 'value', min: 0, max: 100 },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 100
+    },
     series: [{
       type: 'line',
-      data: avgs,
       smooth: true,
-      itemStyle: { color: '#409eff' },
+      data: examTypes.map(key => data[key]?.avg || 0),
       areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(64, 158, 255, 0.5)' },
-            { offset: 1, color: 'rgba(64, 158, 255, 0.1)' }
-          ]
-        }
+        color: 'rgba(37, 99, 235, 0.12)'
+      },
+      lineStyle: {
+        color: '#2563eb',
+        width: 3
+      },
+      itemStyle: {
+        color: '#2563eb'
       }
     }]
   })
 }
 
-watch(semester, () => loadData())
-
 onMounted(async () => {
-  await loadData()
-  
-  subjectChart = echarts.init(subjectChartRef.value)
-  distributionChart = echarts.init(distributionChartRef.value)
   trendChart = echarts.init(trendChartRef.value)
-  
-  updateSubjectChart()
-  updateDistributionChart()
-  updateTrendChart()
-  
-  window.addEventListener('resize', () => {
-    subjectChart?.resize()
-    distributionChart?.resize()
-    trendChart?.resize()
-  })
+  await loadSemesters()
+  await loadData()
+  window.addEventListener('resize', () => trendChart?.resize())
+})
+
+watch(selectedCourse, () => {
+  loadData()
 })
 </script>
 
 <style scoped>
-.analysis {
-  padding: 20px;
+.analysis-page {
+  padding: 24px;
 }
 
-.chart-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.chart-card h3 {
-  margin-bottom: 15px;
-  color: #303133;
-  font-size: 16px;
+.page-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.chart-box {
+  height: 360px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+  }
 }
 </style>

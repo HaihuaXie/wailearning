@@ -1,47 +1,50 @@
 <template>
-  <div class="users">
+  <div class="users-page">
     <div class="page-header">
-      <h1 class="page-title">用户管理</h1>
-      <el-button type="primary" @click="handleAdd">
-        <el-icon><Plus /></el-icon>
-        新增用户
-      </el-button>
+      <div>
+        <h1 class="page-title">用户管理</h1>
+        <p class="page-subtitle">支持管理员、班主任、任课老师和学生四类用户。</p>
+      </div>
+      <el-button type="primary" @click="openCreateDialog">新建用户</el-button>
     </div>
 
-    <div class="table-container">
-      <el-table :data="users" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="username" label="用户名" />
-        <el-table-column prop="real_name" label="姓名" />
-        <el-table-column prop="role" label="角色" width="120">
+    <el-card shadow="never">
+      <el-table :data="users" v-loading="loading">
+        <el-table-column prop="username" label="用户名" min-width="160" />
+        <el-table-column prop="real_name" label="姓名" min-width="140" />
+        <el-table-column label="角色" width="140">
           <template #default="{ row }">
-            <el-tag :type="getRoleTagType(row.role)">
-              {{ getRoleText(row.role) }}
-            </el-tag>
+            <el-tag :type="roleTag(row.role)">{{ roleText(row.role) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="is_active" label="状态" width="80">
+        <el-table-column prop="class_id" label="班级ID" width="120" />
+        <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag :type="row.is_active ? 'success' : 'info'">
               {{ row.is_active ? '启用' : '禁用' }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="220">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+            <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
+            <el-button type="danger" size="small" @click="deleteUser(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑用户' : '新增用户'" width="500px">
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingUser ? '编辑用户' : '新建用户'"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" :disabled="isEdit" />
+          <el-input v-model="form.username" :disabled="Boolean(editingUser)" />
         </el-form-item>
-        <el-form-item label="密码" prop="password" v-if="!isEdit">
+        <el-form-item v-if="!editingUser" label="密码" prop="password">
           <el-input v-model="form.password" type="password" show-password />
         </el-form-item>
         <el-form-item label="姓名" prop="real_name">
@@ -51,38 +54,40 @@
           <el-radio-group v-model="form.role">
             <el-radio label="admin">管理员</el-radio>
             <el-radio label="class_teacher">班主任</el-radio>
-            <el-radio label="teacher">任课教师</el-radio>
+            <el-radio label="teacher">任课老师</el-radio>
+            <el-radio label="student">学生</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="班级" prop="class_id">
-          <el-select v-model="form.class_id" placeholder="选择班级(班主任专属)" clearable style="width: 100%;">
-            <el-option v-for="c in classes" :key="c.id" :label="c.name" :value="c.id" />
+        <el-form-item label="所属班级" prop="class_id">
+          <el-select v-model="form.class_id" placeholder="可选" style="width: 100%" clearable>
+            <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态" v-if="isEdit">
+        <el-form-item v-if="editingUser" label="是否启用">
           <el-switch v-model="form.is_active" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" :loading="submitting" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+
 import api from '@/api'
 
+const loading = ref(false)
+const submitting = ref(false)
+const dialogVisible = ref(false)
+const editingUser = ref(null)
+const formRef = ref(null)
 const users = ref([])
 const classes = ref([])
-const dialogVisible = ref(false)
-const isEdit = ref(false)
-const editingId = ref(null)
-const formRef = ref(null)
 
 const form = reactive({
   username: '',
@@ -100,36 +105,21 @@ const rules = {
   role: [{ required: true, message: '请选择角色', trigger: 'change' }]
 }
 
-const getRoleText = (role) => {
-  const roleMap = {
-    'admin': '管理员',
-    'class_teacher': '班主任',
-    'teacher': '任课教师'
-  }
-  return roleMap[role] || '未知角色'
-}
+const roleText = role => ({
+  admin: '管理员',
+  class_teacher: '班主任',
+  teacher: '任课老师',
+  student: '学生'
+}[role] || role)
 
-const getRoleTagType = (role) => {
-  const typeMap = {
-    'admin': 'danger',
-    'class_teacher': 'warning',
-    'teacher': 'success'
-  }
-  return typeMap[role] || 'info'
-}
+const roleTag = role => ({
+  admin: 'danger',
+  class_teacher: 'warning',
+  teacher: 'success',
+  student: 'info'
+}[role] || '')
 
-const loadUsers = async () => {
-  const data = await api.users.list()
-  users.value = data || []
-}
-
-const loadClasses = async () => {
-  classes.value = await api.classes.list()
-}
-
-const handleAdd = () => {
-  isEdit.value = false
-  editingId.value = null
+const resetForm = () => {
   Object.assign(form, {
     username: '',
     password: '',
@@ -138,54 +128,73 @@ const handleAdd = () => {
     class_id: null,
     is_active: true
   })
+}
+
+const loadUsers = async () => {
+  loading.value = true
+  try {
+    users.value = await api.users.list()
+  } finally {
+    loading.value = false
+  }
+}
+
+const loadClasses = async () => {
+  classes.value = await api.classes.list()
+}
+
+const openCreateDialog = () => {
+  editingUser.value = null
+  resetForm()
   dialogVisible.value = true
 }
 
-const handleEdit = (row) => {
-  isEdit.value = true
-  editingId.value = row.id
+const openEditDialog = user => {
+  editingUser.value = user
   Object.assign(form, {
-    username: row.username,
-    real_name: row.real_name,
-    role: row.role,
-    class_id: row.class_id,
-    is_active: row.is_active
+    username: user.username,
+    password: '',
+    real_name: user.real_name,
+    role: user.role,
+    class_id: user.class_id,
+    is_active: user.is_active
   })
   dialogVisible.value = true
 }
 
-const handleDelete = async (row) => {
-  try {
-    await ElMessageBox.confirm('确定删除该用户吗?', '提示', { type: 'warning' })
-    await api.users.delete(row.id)
-    ElMessage.success('删除成功')
-    loadUsers()
-  } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
-  }
-}
-
-const handleSubmit = async () => {
+const submitForm = async () => {
   await formRef.value.validate()
+  submitting.value = true
   try {
-    if (isEdit.value) {
-      await api.users.update(editingId.value, {
+    if (editingUser.value) {
+      await api.users.update(editingUser.value.id, {
         real_name: form.real_name,
         role: form.role,
         class_id: form.class_id,
         is_active: form.is_active
       })
-      ElMessage.success('修改成功')
+      ElMessage.success('用户已更新')
     } else {
-      await api.users.create(form)
-      ElMessage.success('创建成功')
+      await api.users.create({ ...form })
+      ElMessage.success('用户已创建')
     }
     dialogVisible.value = false
-    loadUsers()
-  } catch (e) {
-    ElMessage.error('操作失败')
+    await loadUsers()
+  } finally {
+    submitting.value = false
+  }
+}
+
+const deleteUser = async user => {
+  try {
+    await ElMessageBox.confirm(`确认删除用户“${user.real_name}”吗？`, '删除用户', { type: 'warning' })
+    await api.users.delete(user.id)
+    ElMessage.success('用户已删除')
+    await loadUsers()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除用户失败', error)
+    }
   }
 }
 
@@ -195,7 +204,32 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.users {
-  padding: 20px;
+.users-page {
+  padding: 24px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: #0f172a;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+  }
 }
 </style>

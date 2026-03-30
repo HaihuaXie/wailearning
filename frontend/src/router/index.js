@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+
 import { useUserStore } from '@/stores/user'
 
 const routes = [
@@ -13,7 +14,12 @@ const routes = [
     children: [
       {
         path: '',
-        redirect: '/dashboard'
+        redirect: '/courses'
+      },
+      {
+        path: 'courses',
+        name: 'Courses',
+        component: () => import('@/views/MyCourses.vue')
       },
       {
         path: 'dashboard',
@@ -60,8 +66,7 @@ const routes = [
       {
         path: 'subjects',
         name: 'Subjects',
-        component: () => import('@/views/Subjects.vue'),
-        meta: { requiresAdmin: true }
+        component: () => import('@/views/Subjects.vue')
       },
       {
         path: 'semesters',
@@ -115,13 +120,25 @@ router.beforeEach((to, from, next) => {
 
   if (to.path !== '/login' && !userStore.isLoggedIn) {
     next('/login')
-  } else if (to.path === '/login' && userStore.isLoggedIn) {
-    next('/')
-  } else if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    next('/dashboard')
-  } else {
-    next()
+    return
   }
+
+  if (to.path === '/login' && userStore.isLoggedIn) {
+    next('/courses')
+    return
+  }
+
+  if (to.meta.requiresAdmin && !userStore.isAdmin) {
+    next(userStore.isStudent ? '/courses' : '/dashboard')
+    return
+  }
+
+  if (userStore.isStudent && ['/dashboard', '/students', '/scores', '/attendance', '/rankings', '/analysis', '/points'].includes(to.path)) {
+    next('/courses')
+    return
+  }
+
+  next()
 })
 
 export default router
