@@ -229,7 +229,7 @@ const menuItems = computed(() => {
     return [...baseMenu, ...studentMenu]
   }
   if (userStore.isAdmin) {
-    return [...baseMenu, ...teacherMenu, ...adminMenu]
+    return [...baseMenu, teacherMenu[0], teacherMenu[1], ...adminMenu]
   }
   return [...baseMenu, ...teacherMenu]
 })

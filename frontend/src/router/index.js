@@ -115,6 +115,8 @@ const router = createRouter({
   routes
 })
 
+const adminHiddenPaths = ['/scores', '/attendance', '/rankings', '/analysis', '/points', '/homework', '/notifications']
+
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
 
@@ -130,6 +132,11 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
     next(userStore.isStudent ? '/courses' : '/dashboard')
+    return
+  }
+
+  if (userStore.isAdmin && adminHiddenPaths.includes(to.path)) {
+    next('/dashboard')
     return
   }
 
