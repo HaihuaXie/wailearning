@@ -1,12 +1,14 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-const api = axios.create({
-  baseURL: '/api',
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+
+const http = axios.create({
+  baseURL: apiBaseUrl,
   timeout: 10000
 })
 
-api.interceptors.request.use(
+http.interceptors.request.use(
   config => {
     const token = localStorage.getItem('token')
     if (token) {
@@ -14,18 +16,14 @@ api.interceptors.request.use(
     }
     return config
   },
-  error => {
-    return Promise.reject(error)
-  }
+  error => Promise.reject(error)
 )
 
-api.interceptors.response.use(
-  response => {
-    return response.data
-  },
+http.interceptors.response.use(
+  response => response.data,
   error => {
     if (error.response) {
-      const message = error.response.data?.detail || '请求失败'
+      const message = error.response.data?.detail || 'Request failed'
       ElMessage.error(message)
       if (error.response.status === 401) {
         localStorage.removeItem('token')
@@ -33,76 +31,80 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     } else {
-      ElMessage.error('网络错误')
+      ElMessage.error('Network error')
     }
     return Promise.reject(error)
   }
 )
 
-export default {
+export { http, apiBaseUrl }
+
+const api = {
   auth: {
-    login: (data) => api.post('/auth/login', data),
-    register: (data) => api.post('/auth/register', data),
-    getCurrentUser: () => api.get('/auth/me')
+    login: data => http.post('/auth/login', data),
+    register: data => http.post('/auth/register', data),
+    getCurrentUser: () => http.get('/auth/me'),
+    changePassword: data => http.post('/auth/change-password', data)
   },
   users: {
-    list: (params) => api.get('/users', { params }),
-    get: (id) => api.get(`/users/${id}`),
-    create: (data) => api.post('/users', data),
-    update: (id, data) => api.put(`/users/${id}`, data),
-    delete: (id) => api.delete(`/users/${id}`)
+    list: params => http.get('/users', { params }),
+    get: id => http.get(`/users/${id}`),
+    create: data => http.post('/users', data),
+    update: (id, data) => http.put(`/users/${id}`, data),
+    delete: id => http.delete(`/users/${id}`)
   },
   classes: {
-    list: () => api.get('/classes'),
-    get: (id) => api.get(`/classes/${id}`),
-    create: (data) => api.post('/classes', data),
-    update: (id, data) => api.put(`/classes/${id}`, data),
-    delete: (id) => api.delete(`/classes/${id}`)
+    list: () => http.get('/classes'),
+    get: id => http.get(`/classes/${id}`),
+    create: data => http.post('/classes', data),
+    update: (id, data) => http.put(`/classes/${id}`, data),
+    delete: id => http.delete(`/classes/${id}`)
   },
   students: {
-    list: (params) => api.get('/students', { params }),
-    get: (id) => api.get(`/students/${id}`),
-    create: (data) => api.post('/students', data),
-    update: (id, data) => api.put(`/students/${id}`, data),
-    delete: (id) => api.delete(`/students/${id}`),
-    batchCreate: (data) => {
-      return api.post('/students/batch', JSON.stringify(data), {
+    list: params => http.get('/students', { params }),
+    get: id => http.get(`/students/${id}`),
+    create: data => http.post('/students', data),
+    update: (id, data) => http.put(`/students/${id}`, data),
+    delete: id => http.delete(`/students/${id}`),
+    batchCreate: data =>
+      http.post('/students/batch', JSON.stringify(data), {
         headers: { 'Content-Type': 'application/json' }
       })
-    }
   },
   subjects: {
-    list: () => api.get('/subjects'),
-    create: (data) => api.post('/subjects', data),
-    delete: (id) => api.delete(`/subjects/${id}`)
+    list: () => http.get('/subjects'),
+    create: data => http.post('/subjects', data),
+    delete: id => http.delete(`/subjects/${id}`)
   },
   scores: {
-    list: (params) => api.get('/scores', { params }),
-    get: (id) => api.get(`/scores/${id}`),
-    create: (data) => api.post('/scores', data),
-    update: (id, data) => api.put(`/scores/${id}`, data),
-    delete: (id) => api.delete(`/scores/${id}`),
-    getStudentScores: (studentId, params) => api.get(`/scores/student/${studentId}`, { params })
+    list: params => http.get('/scores', { params }),
+    get: id => http.get(`/scores/${id}`),
+    create: data => http.post('/scores', data),
+    update: (id, data) => http.put(`/scores/${id}`, data),
+    delete: id => http.delete(`/scores/${id}`),
+    getStudentScores: (studentId, params) => http.get(`/scores/student/${studentId}`, { params })
   },
   semesters: {
-    list: () => api.get('/semesters'),
-    create: (data) => api.post('/semesters', data),
-    delete: (id) => api.delete(`/semesters/${id}`)
+    list: () => http.get('/semesters'),
+    create: data => http.post('/semesters', data),
+    delete: id => http.delete(`/semesters/${id}`)
   },
   attendance: {
-    list: (params) => api.get('/attendance', { params }),
-    create: (data) => api.post('/attendance', data),
-    update: (id, data) => api.put(`/attendance/${id}`, data),
-    delete: (id) => api.delete(`/attendance/${id}`),
-    getClassStats: (classId, params) => api.get(`/attendance/statistics/class/${classId}`, { params }),
-    getStudentStats: (studentId, params) => api.get(`/attendance/statistics/student/${studentId}`, { params })
+    list: params => http.get('/attendance', { params }),
+    create: data => http.post('/attendance', data),
+    update: (id, data) => http.put(`/attendance/${id}`, data),
+    delete: id => http.delete(`/attendance/${id}`),
+    getClassStats: (classId, params) => http.get(`/attendance/statistics/class/${classId}`, { params }),
+    getStudentStats: (studentId, params) => http.get(`/attendance/statistics/student/${studentId}`, { params })
   },
   dashboard: {
-    getStats: (params) => api.get('/dashboard/stats', { params }),
-    getClassRankings: (params) => api.get('/dashboard/rankings/classes', { params }),
-    getStudentRankings: (params) => api.get('/dashboard/rankings/students', { params }),
-    getSubjectRankings: (subjectId, params) => api.get(`/dashboard/rankings/subjects/${subjectId}`, { params }),
-    getTrends: (params) => api.get('/dashboard/analysis/trends', { params }),
-    getSubjectAnalysis: (params) => api.get('/dashboard/analysis/subjects', { params })
+    getStats: params => http.get('/dashboard/stats', { params }),
+    getClassRankings: params => http.get('/dashboard/rankings/classes', { params }),
+    getStudentRankings: params => http.get('/dashboard/rankings/students', { params }),
+    getSubjectRankings: (subjectId, params) => http.get(`/dashboard/rankings/subjects/${subjectId}`, { params }),
+    getTrends: params => http.get('/dashboard/analysis/trends', { params }),
+    getSubjectAnalysis: params => http.get('/dashboard/analysis/subjects', { params })
   }
 }
+
+export default api

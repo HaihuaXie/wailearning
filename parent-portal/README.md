@@ -42,7 +42,7 @@ npm run dev
 server: {
   proxy: {
     '/api': {
-      target: 'http://your-backend-server:8003',  // 修改为你的后端地址
+      target: 'http://your-backend-server:8001',  // 修改为你的后端地址
       changeOrigin: true
     }
   }

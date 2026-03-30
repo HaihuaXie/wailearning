@@ -19,11 +19,11 @@ def get_public_settings(db: Session = Depends(get_db)):
     settings_dict = {s.setting_key: s.setting_value for s in settings}
     
     return SystemSettingsResponse(
-        system_name=settings_dict.get('system_name', 'DD-CLASS 班级管理系统'),
+        system_name=settings_dict.get('system_name', 'BIMSA-CLASS 班级管理系统'),
         login_background=settings_dict.get('login_background', ''),
         system_logo=settings_dict.get('system_logo', ''),
         system_intro=settings_dict.get('system_intro', '一个现代化的班级管理系统'),
-        copyright=settings_dict.get('copyright', '© 2024 DD-CLASS'),
+        copyright=settings_dict.get('copyright', '© 2024 BIMSA-CLASS'),
         use_bing_background=settings_dict.get('use_bing_background', 'true').lower() == 'true'
     )
 

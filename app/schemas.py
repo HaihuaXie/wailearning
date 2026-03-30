@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -60,6 +60,32 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     username: Optional[str] = None
+
+class MessageResponse(BaseModel):
+    message: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        encoded = value.encode('utf-8')
+        if len(encoded) < 8:
+            raise ValueError('New password must be at least 8 characters.')
+        if len(encoded) > 72:
+            raise ValueError('New password must be 72 bytes or fewer.')
+        return value
+
+    @model_validator(mode='after')
+    def validate_password_confirmation(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError('Password confirmation does not match.')
+        if self.current_password == self.new_password:
+            raise ValueError('New password must be different from current password.')
+        return self
 
 class ClassCreate(BaseModel):
     name: str

@@ -109,18 +109,6 @@
           </el-breadcrumb>
         </div>
         <div class="header-right">
-          <div class="social-links">
-            <a href="https://github.com/joyapple/DD-CLASS" target="_blank" class="social-link" title="GitHub">
-              <svg height="20" width="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-              </svg>
-            </a>
-            <a href="https://gitee.com/joyapple2020/dd-class" target="_blank" class="social-link" title="Gitee">
-              <svg height="20" width="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10.123 10.354l-.696-.696c-.82-.82-2.153-.82-2.973 0l-.696.696c-.82.82-.82 2.153 0 2.973l.696.696c.82.82 2.153.82 2.973 0l.696-.696c.82-.82.82-2.153 0-2.973zm9.877 1.323c-.41-.409-1.077-.409-1.487 0l-.41.41c-.82.82-.82 2.153 0 2.973l3.374 3.374c.41.409 1.077.409 1.487 0l.41-.41c.82-.82.82-2.153 0-2.973l-3.374-3.374zM3.205 13.165l-1.415 1.414c-.41.409-.41 1.077 0 1.487l4.243 4.243c.409.409 1.077.409 1.487 0l1.414-1.414-5.729-5.73z"/>
-              </svg>
-            </a>
-          </div>
           <el-dropdown @command="handleCommand">
             <div class="user-info">
               <el-avatar :size="32" class="user-avatar">
@@ -141,6 +129,10 @@
                   <el-icon><Setting /></el-icon>
                   设置
                 </el-dropdown-item>
+                <el-dropdown-item command="change-password">
+                  <el-icon><Lock /></el-icon>
+                  修改密码
+                </el-dropdown-item>
                 <el-dropdown-item command="logout" divided>
                   <el-icon><SwitchButton /></el-icon>
                   退出登录
@@ -158,18 +150,73 @@
       <el-footer class="footer">
         <div class="footer-content">
           <el-text class="footer-text">
-            © 2024 DD-CLASS 班级管理系统 | Made with ❤️
+            {{ userStore.systemSettings?.copyright || '© 2024 BIMSA-CLASS' }}
           </el-text>
         </div>
       </el-footer>
+
+      <el-dialog
+        v-model="passwordDialogVisible"
+        title="修改密码"
+        width="420px"
+        destroy-on-close
+      >
+        <el-form label-position="top" @submit.prevent>
+          <input
+            :value="userStore.userInfo?.username || ''"
+            type="text"
+            name="username"
+            autocomplete="username"
+            readonly
+            tabindex="-1"
+            aria-hidden="true"
+            style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"
+          />
+          <el-form-item label="当前密码">
+            <el-input
+              v-model="passwordForm.current_password"
+              type="password"
+              show-password
+              autocomplete="current-password"
+            />
+          </el-form-item>
+          <el-form-item label="新密码">
+            <el-input
+              v-model="passwordForm.new_password"
+              type="password"
+              show-password
+              autocomplete="new-password"
+            />
+          </el-form-item>
+          <el-form-item label="确认新密码">
+            <el-input
+              v-model="passwordForm.confirm_password"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              @keyup.enter="submitChangePassword"
+            />
+          </el-form-item>
+          <el-text type="info">新密码需要 8-72 个字符，保存后立即生效。</el-text>
+        </el-form>
+        <template #footer>
+          <span>
+            <el-button @click="closeChangePasswordDialog">取消</el-button>
+            <el-button type="primary" :loading="passwordSubmitting" @click="submitChangePassword">
+              保存密码
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
     </el-container>
   </el-container>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import api from '@/api'
 import { ElMessage } from 'element-plus'
 import {
   DataAnalysis,
@@ -188,7 +235,8 @@ import {
   Expand,
   Fold,
   Setting,
-  Bell
+  Bell,
+  Lock
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -196,6 +244,13 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const isCollapsed = ref(false)
+const passwordDialogVisible = ref(false)
+const passwordSubmitting = ref(false)
+const passwordForm = reactive({
+  current_password: '',
+  new_password: '',
+  confirm_password: ''
+})
 
 const activeMenu = computed(() => route.path)
 
@@ -248,9 +303,69 @@ const handleCommand = (command) => {
     case 'settings':
       ElMessage.info('设置功能开发中...')
       break
+    case 'change-password':
+      openChangePasswordDialog()
+      break
     case 'logout':
       handleLogout()
       break
+  }
+}
+
+const resetPasswordForm = () => {
+  passwordForm.current_password = ''
+  passwordForm.new_password = ''
+  passwordForm.confirm_password = ''
+}
+
+const openChangePasswordDialog = () => {
+  resetPasswordForm()
+  passwordDialogVisible.value = true
+}
+
+const closeChangePasswordDialog = () => {
+  passwordDialogVisible.value = false
+  resetPasswordForm()
+}
+
+const submitChangePassword = async () => {
+  if (passwordSubmitting.value) {
+    return
+  }
+
+  if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+    ElMessage.warning('请填写完整的密码信息')
+    return
+  }
+
+  const passwordLength = new TextEncoder().encode(passwordForm.new_password).length
+  if (passwordLength < 8) {
+    ElMessage.warning('新密码至少需要 8 个字符')
+    return
+  }
+
+  if (passwordLength > 72) {
+    ElMessage.warning('新密码不能超过 72 个字节')
+    return
+  }
+
+  if (passwordForm.new_password !== passwordForm.confirm_password) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+
+  if (passwordForm.current_password === passwordForm.new_password) {
+    ElMessage.warning('新密码不能与当前密码相同')
+    return
+  }
+
+  passwordSubmitting.value = true
+  try {
+    const result = await api.auth.changePassword({ ...passwordForm })
+    ElMessage.success(result?.message || '密码修改成功')
+    closeChangePasswordDialog()
+  } finally {
+    passwordSubmitting.value = false
   }
 }
 
@@ -417,36 +532,6 @@ const handleLogout = () => {
   display: flex;
   align-items: center;
   gap: 16px;
-}
-
-.social-links {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-right: 16px;
-  border-right: 1px solid #e4e7ed;
-}
-
-.social-link {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: #606266;
-  transition: all 0.3s ease;
-}
-
-.social-link:hover {
-  color: #409eff;
-  background: #f0f9ff;
-  transform: translateY(-2px);
-}
-
-.social-link svg {
-  width: 18px;
-  height: 18px;
 }
 
 .user-info {

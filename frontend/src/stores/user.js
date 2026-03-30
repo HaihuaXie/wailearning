@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/api'
+import api, { http } from '@/api'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref(localStorage.getItem('token') || '')
@@ -17,28 +17,28 @@ export const useUserStore = defineStore('user', () => {
     const formData = new FormData()
     formData.append('username', username)
     formData.append('password', password)
-    
+
     const data = await api.auth.login(formData)
     token.value = data.access_token
     localStorage.setItem('token', data.access_token)
-    
+
     const userData = await api.auth.getCurrentUser()
     userInfo.value = userData
     localStorage.setItem('user', JSON.stringify(userData))
-    
+
     await fetchSystemSettings()
-    
+
     return userData
   }
 
   async function fetchSystemSettings() {
     try {
-      const res = await api.get('/settings/public')
-      systemSettings.value = res.data
-      localStorage.setItem('system_settings', JSON.stringify(res.data))
-      document.title = res.data.system_name
+      const data = await http.get('/settings/public')
+      systemSettings.value = data
+      localStorage.setItem('system_settings', JSON.stringify(data))
+      document.title = data.system_name
     } catch (e) {
-      console.error('获取系统设置失败', e)
+      console.error('Failed to fetch system settings', e)
     }
   }
 

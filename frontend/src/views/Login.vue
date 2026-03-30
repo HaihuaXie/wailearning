@@ -50,11 +50,6 @@
         </el-form-item>
       </el-form>
 
-      <div class="login-tips">
-        <el-icon><InfoFilled /></el-icon>
-        <span>默认账号：admin / admin123</span>
-      </div>
-      
       <div class="login-footer">
         {{ settings.copyright }}
       </div>
@@ -66,7 +61,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock, InfoFilled } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import axios from 'axios'
 
@@ -78,11 +73,11 @@ const formRef = ref(null)
 const loading = ref(false)
 
 const settings = ref({
-  system_name: 'DD-CLASS 班级管理系统',
+  system_name: 'BIMSA-CLASS 班级管理系统',
   system_logo: '',
   system_intro: '一个现代化的班级管理系统',
   login_background: '',
-  copyright: '© 2024 DD-CLASS',
+  copyright: '© 2024 BIMSA-CLASS',
   use_bing_background: true
 })
 
@@ -295,17 +290,6 @@ onMounted(async () => {
   background: linear-gradient(135deg, #0f5298 0%, #2cb5e8 100%);
   box-shadow: 0 0 20px rgba(44, 181, 232, 0.5);
   transform: translateY(-2px);
-}
-
-.login-tips {
-  margin-top: 20px;
-  text-align: center;
-  color: #909399;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
 }
 
 .login-footer {

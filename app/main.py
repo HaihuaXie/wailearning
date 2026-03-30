@@ -1,20 +1,45 @@
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base
-from app.routers import auth, classes, students, scores, attendance, dashboard, subjects, users, semesters, logs, points, settings, homework, notifications, parent
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(
-    title="班级管理系统 API",
-    description="轻量化班级管理系统后端API",
-    version="1.0.0"
+from app.config import settings
+from app.database import Base, engine
+from app.routers import (
+    attendance,
+    auth,
+    classes,
+    dashboard,
+    homework,
+    logs,
+    notifications,
+    parent,
+    points,
+    scores,
+    semesters,
+    settings as system_settings,
+    students,
+    subjects,
+    users,
 )
 
+if settings.APP_ENV != "production":
+    Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="FastAPI backend for the BIMSA-CLASS school management system.",
+    version="1.0.0",
+)
+
+if settings.TRUSTED_HOSTS and "*" not in settings.TRUSTED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.TRUSTED_HOSTS)
+
+allow_all_origins = "*" in settings.BACKEND_CORS_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["*"] if allow_all_origins else settings.BACKEND_CORS_ORIGINS,
+    allow_credentials=not allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -30,32 +55,38 @@ app.include_router(users.router)
 app.include_router(semesters.router)
 app.include_router(logs.router)
 app.include_router(points.router)
-app.include_router(settings.router)
+app.include_router(system_settings.router)
 app.include_router(homework.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)
 
+
 @app.get("/")
 def root():
-    return {"message": "班级管理系统 API", "status": "running"}
+    return {
+        "message": settings.APP_NAME,
+        "status": "running",
+        "environment": settings.APP_ENV,
+    }
+
 
 @app.get("/health")
+@app.get("/api/health")
 def health_check():
-    return {"status": "healthy"}
+    return {"status": "healthy", "app": settings.APP_NAME}
+
 
 @app.get("/api/bing-background")
 def get_bing_background():
-    """获取Bing每日一图"""
-    import httpx
     try:
         response = httpx.get(
             "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN",
-            timeout=10.0
+            timeout=10.0,
         )
         data = response.json()
-        if data.get("images") and len(data["images"]) > 0:
+        if data.get("images"):
             image_url = "https://www.bing.com" + data["images"][0]["url"]
             return {"url": image_url}
-    except Exception as e:
-        print(f"获取Bing背景失败: {e}")
+    except Exception as exc:
+        print(f"Failed to fetch Bing background: {exc}")
     return {"url": ""}

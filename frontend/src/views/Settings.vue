@@ -137,11 +137,11 @@ const imageUrl = ref('')
 const currentUploadField = ref('')
 
 const form = ref({
-  system_name: 'DD-CLASS 班级管理系统',
+  system_name: 'BIMSA-CLASS 班级管理系统',
   login_background: '',
   system_logo: '',
   system_intro: '一个现代化的班级管理系统',
-  copyright: '© 2024 DD-CLASS',
+  copyright: '© 2024 BIMSA-CLASS',
   use_bing_background: true
 })
 
@@ -169,11 +169,11 @@ const fetchSettings = async () => {
       settingsData[item.setting_key] = item.setting_value
     })
     form.value = {
-      system_name: settingsData.system_name || 'DD-CLASS 班级管理系统',
+      system_name: settingsData.system_name || 'BIMSA-CLASS 班级管理系统',
       login_background: settingsData.login_background || '',
       system_logo: settingsData.system_logo || '',
       system_intro: settingsData.system_intro || '一个现代化的班级管理系统',
-      copyright: settingsData.copyright || '© 2024 DD-CLASS',
+      copyright: settingsData.copyright || '© 2024 BIMSA-CLASS',
       use_bing_background: settingsData.use_bing_background === 'true'
     }
     originalForm.value = { ...form.value }

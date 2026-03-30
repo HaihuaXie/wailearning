@@ -1,11 +1,13 @@
 import axios from 'axios'
 
-const api = axios.create({
-  baseURL: '/api',
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+
+const http = axios.create({
+  baseURL: apiBaseUrl,
   timeout: 10000
 })
 
-api.interceptors.response.use(
+http.interceptors.response.use(
   response => response.data,
   error => {
     if (error.response) {
@@ -15,11 +17,13 @@ api.interceptors.response.use(
   }
 )
 
+export { http, apiBaseUrl }
+
 export default {
-  verifyCode: (code) => api.get(`/parent/verify/${code}`),
-  getStudent: (code) => api.get(`/parent/student/${code}`),
-  getScores: (code, params) => api.get(`/parent/scores/${code}`, { params }),
-  getNotifications: (code, params) => api.get(`/parent/notifications/${code}`, { params }),
-  getHomework: (code, params) => api.get(`/parent/homework/${code}`, { params }),
-  getStats: (code, params) => api.get(`/parent/stats/${code}`, { params })
+  verifyCode: code => http.get(`/parent/verify/${code}`),
+  getStudent: code => http.get(`/parent/student/${code}`),
+  getScores: (code, params) => http.get(`/parent/scores/${code}`, { params }),
+  getNotifications: (code, params) => http.get(`/parent/notifications/${code}`, { params }),
+  getHomework: (code, params) => http.get(`/parent/homework/${code}`, { params }),
+  getStats: (code, params) => http.get(`/parent/stats/${code}`, { params })
 }

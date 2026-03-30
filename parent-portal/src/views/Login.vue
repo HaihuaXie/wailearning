@@ -3,7 +3,7 @@
     <div class="login-header">
       <div class="logo">🎓</div>
       <h1>家长端口</h1>
-      <p class="subtitle">DD-CLASS 班级管理系统</p>
+      <p class="subtitle">BIMSA-CLASS 班级管理系统</p>
     </div>
 
     <el-card class="login-card">

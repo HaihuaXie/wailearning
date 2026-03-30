@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
-from app.schemas import Token, UserCreate, UserResponse
+from app.schemas import ChangePasswordRequest, MessageResponse, Token, UserCreate, UserResponse
 from app.auth import verify_password, get_password_hash, create_access_token, get_current_active_user
 from app.config import settings
 from app.services import LogService
@@ -69,3 +69,46 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_active_user)):
     return current_user
+
+@router.post("/change-password", response_model=MessageResponse)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    request: Request = None
+):
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        LogService.log(
+            db=db,
+            action="change_password",
+            target_type="auth",
+            user_id=current_user.id,
+            username=current_user.username,
+            target_id=current_user.id,
+            target_name=current_user.username,
+            details="Current password verification failed.",
+            ip_address=request.client.host if request else None,
+            user_agent=str(request.headers.get("user-agent")) if request else None,
+            result="failed"
+        )
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    db.add(current_user)
+    db.commit()
+
+    LogService.log(
+        db=db,
+        action="change_password",
+        target_type="auth",
+        user_id=current_user.id,
+        username=current_user.username,
+        target_id=current_user.id,
+        target_name=current_user.username,
+        details="User changed their own password.",
+        ip_address=request.client.host if request else None,
+        user_agent=str(request.headers.get("user-agent")) if request else None,
+        result="success"
+    )
+
+    return {"message": "Password updated successfully"}
