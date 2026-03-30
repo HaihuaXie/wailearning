@@ -41,6 +41,7 @@
                 <el-button type="primary" :loading="importing" @click="triggerImport">
                   一键导入名单
                 </el-button>
+                <el-button @click="router.push('/students/new')">新增学生</el-button>
                 <input
                   ref="fileInputRef"
                   class="hidden-file-input"
@@ -69,6 +70,16 @@
             <el-table-column label="所属班级" min-width="180">
               <template #default="{ row }">
                 {{ row.class_name || '未分配班级' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="180" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" size="small" @click="router.push(`/students/${row.id}/edit`)">
+                  编辑
+                </el-button>
+                <el-button type="danger" size="small" @click="deleteStudent(row)">
+                  删除
+                </el-button>
               </template>
             </el-table-column>
           </template>
@@ -137,7 +148,7 @@ const showCourseEmpty = computed(() => !isAdminView.value && !selectedCourse.val
 
 const pageSubtitle = computed(() => {
   if (isAdminView.value) {
-    return '查看全校学生的姓名、性别、学号和所属班级，并支持批量导入名单。'
+    return '查看全校学生名单，并支持新增、编辑、删除和批量导入。'
   }
 
   if (selectedCourse.value) {
@@ -429,6 +440,23 @@ const handleFileChange = async event => {
   } finally {
     importing.value = false
     resetFileInput()
+  }
+}
+
+const deleteStudent = async student => {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除学生“${student.name}”吗？删除后将同步移除该学生的关联成绩、考勤和课程关联数据。`,
+      '删除学生',
+      { type: 'warning' }
+    )
+    await api.students.delete(student.id)
+    ElMessage.success('学生已删除')
+    await loadStudents()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除学生失败', error)
+    }
   }
 }
 

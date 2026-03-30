@@ -177,6 +177,10 @@ const homePath = computed(() => (userStore.isAdmin ? adminHomePath : '/courses')
 const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
 
 const currentRouteName = computed(() => {
+  if (route.meta?.title) {
+    return route.meta.title
+  }
+
   const routeMap = {
     '/courses': '我的课程',
     '/dashboard': '课程仪表盘',

@@ -38,6 +38,18 @@ const routes = [
         component: () => import('@/views/Students.vue')
       },
       {
+        path: 'students/new',
+        name: 'StudentCreate',
+        component: () => import('@/views/StudentForm.vue'),
+        meta: { requiresAdmin: true, title: '新增学生' }
+      },
+      {
+        path: 'students/:id/edit',
+        name: 'StudentEdit',
+        component: () => import('@/views/StudentForm.vue'),
+        meta: { requiresAdmin: true, title: '编辑学生' }
+      },
+      {
         path: 'scores',
         name: 'Scores',
         component: () => import('@/views/Scores.vue')
