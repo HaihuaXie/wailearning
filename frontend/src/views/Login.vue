@@ -2,33 +2,28 @@
   <div class="login-container" :class="{ 'has-background': hasBackground }" :style="backgroundStyle">
     <div class="login-card">
       <div class="login-header">
-        <div class="logo-container" v-if="settings.system_logo">
+        <div v-if="settings.system_logo" class="logo-container">
           <img :src="settings.system_logo" alt="Logo" class="system-logo" />
         </div>
         <h1 class="system-name">{{ settings.system_name }}</h1>
         <p class="system-desc">{{ settings.system_intro }}</p>
       </div>
 
-      <el-form 
-        :model="form" 
-        :rules="rules" 
-        ref="formRef" 
-        class="login-form"
-      >
+      <el-form ref="formRef" :model="form" :rules="rules" class="login-form">
         <el-form-item prop="username">
-          <el-input 
-            v-model="form.username" 
+          <el-input
+            v-model="form.username"
             placeholder="用户名 / Username"
             :prefix-icon="User"
             size="large"
             clearable
           />
         </el-form-item>
-        
+
         <el-form-item prop="password">
-          <el-input 
-            v-model="form.password" 
-            type="password" 
+          <el-input
+            v-model="form.password"
+            type="password"
             placeholder="密码 / Password"
             :prefix-icon="Lock"
             size="large"
@@ -38,14 +33,14 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button 
+          <el-button
             type="primary"
             size="large"
-            :loading="loading" 
+            :loading="loading"
             @click="handleLogin"
             class="login-btn"
           >
-            {{ loading ? '登录中...' : '登 录' }}
+            {{ loading ? '登录中...' : '登录' }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -58,13 +53,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
-import { useUserStore } from '@/stores/user'
-import { normalizeSystemSettings } from '@/utils/branding'
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import { Lock, User } from '@element-plus/icons-vue'
+
+import { normalizeSystemSettings } from '@/utils/branding'
+import { useUserStore } from '@/stores/user'
 
 const api = axios.create({ baseURL: '/api' })
 const router = useRouter()
@@ -72,17 +68,26 @@ const userStore = useUserStore()
 
 const formRef = ref(null)
 const loading = ref(false)
+const bingBackground = ref('')
 
 const settings = ref({
-  system_name: 'BIMSA-CLASS 班级管理系统',
+  system_name: 'BIMSA-CLASS 大学生教学管理系统',
   system_logo: '',
-  system_intro: '一个现代化的班级管理系统',
+  system_intro: '面向大学生的教学管理系统',
   login_background: '',
-  copyright: '© 2024 BIMSA-CLASS',
+  copyright: '(c) 2026 BIMSA-CLASS',
   use_bing_background: true
 })
 
-const bingBackground = ref('')
+const form = reactive({
+  username: '',
+  password: ''
+})
+
+const rules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+}
 
 const backgroundStyle = computed(() => {
   if (settings.value.use_bing_background && bingBackground.value) {
@@ -112,24 +117,9 @@ const fetchBingBackground = async () => {
     if (res.data.url) {
       bingBackground.value = res.data.url
     }
-  } catch (e) {
-    console.error('获取Bing背景失败', e)
-    bingBackground.value = 'https://www.bing.com/th?id=OHR.ZH-CN-8503073941_UHD.jpg'
+  } catch (error) {
+    console.error('获取 Bing 背景失败', error)
   }
-}
-
-const form = reactive({
-  username: '',
-  password: ''
-})
-
-const rules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' }
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' }
-  ]
 }
 
 const fetchSettings = async () => {
@@ -138,25 +128,25 @@ const fetchSettings = async () => {
     const normalizedSettings = normalizeSystemSettings(res.data)
     settings.value = normalizedSettings
     document.title = normalizedSettings?.system_name || 'BIMSA-CLASS 管理端'
-  } catch (e) {
-    console.error('获取系统设置失败', e)
+  } catch (error) {
+    console.error('获取系统设置失败', error)
   }
 }
 
 const handleLogin = async () => {
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        await userStore.login(form.username, form.password)
-        ElMessage.success('登录成功')
-        router.push('/')
-      } catch (error) {
-        console.error(error)
-        ElMessage.error('登录失败，请检查用户名和密码')
-      } finally {
-        loading.value = false
-      }
+  await formRef.value.validate(async valid => {
+    if (!valid) return
+
+    loading.value = true
+    try {
+      await userStore.login(form.username, form.password)
+      ElMessage.success('登录成功')
+      router.push('/courses')
+    } catch (error) {
+      console.error(error)
+      ElMessage.error('登录失败，请检查用户名和密码')
+    } finally {
+      loading.value = false
     }
   })
 }
@@ -173,7 +163,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #0c3483 0%, #0f5298 50%, #2cb5e8 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 50%, #38bdf8 100%);
   position: relative;
   overflow: hidden;
 }
@@ -191,60 +181,31 @@ onMounted(async () => {
 .login-container:not(.has-background)::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
-    radial-gradient(circle at 20% 80%, rgba(44, 181, 232, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(44, 181, 232, 0.3) 0%, transparent 50%);
-  pointer-events: none;
-}
-
-.login-container:not(.has-background)::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    45deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.05) 45%,
-    rgba(255, 255, 255, 0.05) 55%,
-    transparent 60%
-  );
-  animation: shine 15s infinite;
-  pointer-events: none;
-}
-
-@keyframes shine {
-  0% { transform: translateX(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) rotate(45deg); }
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 80%, rgba(56, 189, 248, 0.28) 0%, transparent 48%),
+    radial-gradient(circle at 80% 20%, rgba(96, 165, 250, 0.2) 0%, transparent 45%);
 }
 
 .login-card {
-  background: rgba(255, 255, 255, 0.95);
+  width: 420px;
   padding: 40px;
-  border-radius: 16px;
-  width: 400px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.2),
-    0 0 60px rgba(44, 181, 232, 0.2);
-  backdrop-filter: blur(10px);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   position: relative;
   z-index: 1;
-  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 28px;
 }
 
 .logo-container {
-  margin-bottom: 15px;
+  margin-bottom: 16px;
 }
 
 .system-logo {
@@ -253,51 +214,34 @@ onMounted(async () => {
 }
 
 .system-name {
-  margin: 10px 0;
-  font-size: 24px;
-  color: #0c3483;
-  font-weight: bold;
+  margin: 0 0 12px;
+  font-size: 28px;
+  color: #0f172a;
 }
 
 .system-desc {
   margin: 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.login-form {
-  margin-top: 20px;
-}
-
-.login-form :deep(.el-input__wrapper) {
-  box-shadow: 0 0 0 1px #0f5298 inset;
-  transition: all 0.3s ease;
-}
-
-.login-form :deep(.el-input__wrapper:hover),
-.login-form :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #2cb5e8 inset, 0 0 15px rgba(44, 181, 232, 0.3);
+  color: #475569;
+  line-height: 1.7;
 }
 
 .login-btn {
   width: 100%;
-  height: 45px;
-  font-size: 16px;
-  background: linear-gradient(135deg, #0c3483 0%, #2cb5e8 100%);
-  border: none;
-  transition: all 0.3s ease;
-}
-
-.login-btn:hover {
-  background: linear-gradient(135deg, #0f5298 0%, #2cb5e8 100%);
-  box-shadow: 0 0 20px rgba(44, 181, 232, 0.5);
-  transform: translateY(-2px);
+  height: 46px;
+  border-radius: 14px;
 }
 
 .login-footer {
-  margin-top: 20px;
+  margin-top: 16px;
   text-align: center;
-  color: #909399;
-  font-size: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    width: calc(100% - 32px);
+    padding: 28px 22px;
+  }
 }
 </style>

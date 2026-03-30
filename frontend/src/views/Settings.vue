@@ -138,11 +138,11 @@ const imageUrl = ref('')
 const currentUploadField = ref('')
 
 const form = ref({
-  system_name: 'BIMSA-CLASS 班级管理系统',
+  system_name: 'BIMSA-CLASS 大学生教学管理系统',
   login_background: '',
   system_logo: '',
-  system_intro: '一个现代化的班级管理系统',
-  copyright: '© 2024 BIMSA-CLASS',
+  system_intro: '面向大学生的教学管理系统',
+  copyright: '(c) 2026 BIMSA-CLASS',
   use_bing_background: true
 })
 
@@ -172,11 +172,11 @@ const fetchSettings = async () => {
         : item.setting_value
     })
     form.value = {
-      system_name: settingsData.system_name || 'BIMSA-CLASS 班级管理系统',
+      system_name: settingsData.system_name || 'BIMSA-CLASS 大学生教学管理系统',
       login_background: settingsData.login_background || '',
       system_logo: settingsData.system_logo || '',
-      system_intro: settingsData.system_intro || '一个现代化的班级管理系统',
-      copyright: settingsData.copyright || '© 2024 BIMSA-CLASS',
+      system_intro: settingsData.system_intro || '面向大学生的教学管理系统',
+      copyright: settingsData.copyright || '(c) 2026 BIMSA-CLASS',
       use_bing_background: settingsData.use_bing_background === 'true'
     }
     originalForm.value = { ...form.value }
