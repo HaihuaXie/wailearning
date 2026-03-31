@@ -114,6 +114,7 @@ class Subject(Base):
     homeworks = relationship("Homework", back_populates="subject")
     attendances = relationship("Attendance", back_populates="subject")
     notifications = relationship("Notification", back_populates="subject")
+    materials = relationship("CourseMaterial", back_populates="subject")
     enrollments = relationship("CourseEnrollment", back_populates="course")
 
 
@@ -297,6 +298,8 @@ class Homework(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     content = Column(String, nullable=True)
+    attachment_name = Column(String, nullable=True)
+    attachment_url = Column(String, nullable=True)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
@@ -315,6 +318,8 @@ class Notification(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     content = Column(String, nullable=True)
+    attachment_name = Column(String, nullable=True)
+    attachment_url = Column(String, nullable=True)
     priority = Column(String, default="normal")
     is_pinned = Column(Boolean, default=False)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
@@ -326,6 +331,25 @@ class Notification(Base):
     creator = relationship("User", backref="notifications")
     class_obj = relationship("Class", backref="notifications")
     subject = relationship("Subject", back_populates="notifications")
+
+
+class CourseMaterial(Base):
+    __tablename__ = "course_materials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    content = Column(String, nullable=True)
+    attachment_name = Column(String, nullable=True)
+    attachment_url = Column(String, nullable=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    class_obj = relationship("Class", backref="materials")
+    subject = relationship("Subject", back_populates="materials")
+    creator = relationship("User", backref="materials")
 
 
 class NotificationRead(Base):

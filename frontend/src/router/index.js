@@ -114,6 +114,11 @@ const routes = [
         component: () => import('@/views/Homework.vue')
       },
       {
+        path: 'materials',
+        name: 'Materials',
+        component: () => import('@/views/Materials.vue')
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/Notifications.vue')
@@ -128,7 +133,7 @@ const router = createRouter({
 })
 
 const adminHomePath = '/students'
-const adminHiddenPaths = ['/courses', '/dashboard', '/scores', '/attendance', '/rankings', '/analysis', '/points', '/homework', '/notifications']
+const adminHiddenPaths = ['/courses', '/dashboard', '/scores', '/attendance', '/rankings', '/analysis', '/points', '/materials', '/homework', '/notifications']
 
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()

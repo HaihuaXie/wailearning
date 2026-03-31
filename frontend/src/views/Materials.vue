@@ -1,16 +1,16 @@
 <template>
-  <div class="homework-page">
+  <div class="materials-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">作业管理</h1>
+        <h1 class="page-title">课程资料</h1>
         <p class="page-subtitle">
-          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看作业。' }}
+          {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先选择课程后查看资料。' }}
         </p>
       </div>
       <div class="header-actions">
         <el-button v-if="userStore.isStudent" @click="router.push('/courses')">切换课程</el-button>
         <el-button v-if="!userStore.isStudent && selectedCourse" type="primary" @click="openCreateDialog">
-          发布作业
+          发布资料
         </el-button>
       </div>
     </div>
@@ -19,8 +19,8 @@
 
     <template v-else>
       <el-card shadow="never">
-        <el-table :data="homeworks" v-loading="loading">
-          <el-table-column prop="title" label="作业标题" min-width="200" />
+        <el-table :data="materials" v-loading="loading" @row-click="viewMaterial">
+          <el-table-column prop="title" label="资料标题" min-width="220" />
           <el-table-column prop="subject_name" label="课程" width="160" />
           <el-table-column label="附件" width="140">
             <template #default="{ row }">
@@ -35,25 +35,19 @@
               <span v-else class="muted-text">无</span>
             </template>
           </el-table-column>
-          <el-table-column prop="due_date" label="截止时间" width="180">
-            <template #default="{ row }">
-              {{ formatDate(row.due_date) }}
-            </template>
-          </el-table-column>
           <el-table-column prop="creator_name" label="发布人" width="120" />
           <el-table-column prop="created_at" label="发布时间" width="180">
             <template #default="{ row }">
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="180">
+          <el-table-column v-if="!userStore.isStudent" label="操作" width="120">
             <template #default="{ row }">
-              <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
               <el-button
-                v-if="!userStore.isStudent"
-                size="small"
+                v-if="canDeleteMaterial(row)"
                 type="danger"
-                @click="deleteHomework(row)"
+                size="small"
+                @click.stop="deleteMaterial(row)"
               >
                 删除
               </el-button>
@@ -63,20 +57,12 @@
       </el-card>
     </template>
 
-    <el-dialog v-model="dialogVisible" title="发布作业" width="620px" destroy-on-close>
+    <el-dialog v-model="dialogVisible" title="发布资料" width="620px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="作业标题" prop="title">
+        <el-form-item label="资料标题" prop="title">
           <el-input v-model="form.title" />
         </el-form-item>
-        <el-form-item label="截止时间" prop="due_date">
-          <el-date-picker
-            v-model="form.due_date"
-            type="datetime"
-            placeholder="请选择截止时间"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="作业内容" prop="content">
+        <el-form-item label="资料说明" prop="content">
           <el-input v-model="form.content" type="textarea" :rows="6" />
         </el-form-item>
         <el-form-item label="附件">
@@ -90,7 +76,15 @@
           </el-upload>
           <div class="attachment-help">{{ attachmentHintText }}</div>
           <div v-if="attachmentDisplayName" class="attachment-preview">
-            <span>{{ attachmentDisplayName }}</span>
+            <el-link
+              v-if="form.attachment_url"
+              :href="form.attachment_url"
+              target="_blank"
+              type="primary"
+            >
+              {{ attachmentDisplayName }}
+            </el-link>
+            <span v-else>{{ attachmentDisplayName }}</span>
             <el-button link type="danger" @click="removeAttachment">移除</el-button>
           </div>
         </el-form-item>
@@ -101,17 +95,16 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="作业详情" width="620px" destroy-on-close>
-      <el-descriptions v-if="currentHomework" :column="2" border>
-        <el-descriptions-item label="作业标题" :span="2">{{ currentHomework.title }}</el-descriptions-item>
-        <el-descriptions-item label="课程">{{ currentHomework.subject_name || selectedCourse?.name }}</el-descriptions-item>
-        <el-descriptions-item label="截止时间">{{ formatDate(currentHomework.due_date) }}</el-descriptions-item>
-        <el-descriptions-item label="发布人">{{ currentHomework.creator_name }}</el-descriptions-item>
-        <el-descriptions-item label="发布时间">{{ formatDate(currentHomework.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="作业内容" :span="2">{{ currentHomework.content || '暂无内容' }}</el-descriptions-item>
+    <el-dialog v-model="detailVisible" title="资料详情" width="620px" destroy-on-close>
+      <el-descriptions v-if="currentMaterial" :column="2" border>
+        <el-descriptions-item label="资料标题" :span="2">{{ currentMaterial.title }}</el-descriptions-item>
+        <el-descriptions-item label="课程">{{ currentMaterial.subject_name || selectedCourse?.name }}</el-descriptions-item>
+        <el-descriptions-item label="发布人">{{ currentMaterial.creator_name }}</el-descriptions-item>
+        <el-descriptions-item label="发布时间">{{ formatDate(currentMaterial.created_at) }}</el-descriptions-item>
+        <el-descriptions-item label="资料说明" :span="2">{{ currentMaterial.content || '暂无说明' }}</el-descriptions-item>
         <el-descriptions-item label="附件" :span="2">
-          <el-button v-if="currentHomework.attachment_url" type="primary" link @click="openAttachment(currentHomework)">
-            {{ currentHomework.attachment_name || '下载附件' }}
+          <el-button v-if="currentMaterial.attachment_url" type="primary" link @click="openAttachment(currentMaterial)">
+            {{ currentMaterial.attachment_name || '下载附件' }}
           </el-button>
           <span v-else class="muted-text">无附件</span>
         </el-descriptions-item>
@@ -136,8 +129,8 @@ const loading = ref(false)
 const submitting = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
-const currentHomework = ref(null)
-const homeworks = ref([])
+const currentMaterial = ref(null)
+const materials = ref([])
 const formRef = ref(null)
 const attachmentFile = ref(null)
 
@@ -147,48 +140,44 @@ const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.
 const form = reactive({
   title: '',
   content: '',
-  due_date: null,
   attachment_name: '',
   attachment_url: ''
 })
 
 const rules = {
-  title: [{ required: true, message: '请输入作业标题', trigger: 'blur' }]
+  title: [{ required: true, message: '请输入资料标题', trigger: 'blur' }]
 }
 
-const buildParams = () => {
+const loadMaterials = async () => {
   if (!selectedCourse.value) {
-    return {}
-  }
-  return {
-    class_id: selectedCourse.value.class_id,
-    subject_id: selectedCourse.value.id,
-    page: 1,
-    page_size: 100
-  }
-}
-
-const loadHomeworks = async () => {
-  if (!selectedCourse.value) {
-    homeworks.value = []
+    materials.value = []
     return
   }
+
   loading.value = true
   try {
-    const result = await api.homework.list(buildParams())
-    homeworks.value = result?.data || []
+    const result = await api.materials.list({
+      class_id: selectedCourse.value.class_id,
+      subject_id: selectedCourse.value.id,
+      page: 1,
+      page_size: 100
+    })
+    materials.value = result?.data || []
   } finally {
     loading.value = false
   }
 }
 
-const openCreateDialog = () => {
+const resetForm = () => {
   form.title = ''
   form.content = ''
-  form.due_date = null
   form.attachment_name = ''
   form.attachment_url = ''
   attachmentFile.value = null
+}
+
+const openCreateDialog = () => {
+  resetForm()
   dialogVisible.value = true
 }
 
@@ -236,25 +225,24 @@ const submitForm = async () => {
   submitting.value = true
   try {
     const attachment = await uploadAttachmentIfNeeded()
-    await api.homework.create({
+    await api.materials.create({
       title: form.title,
       content: form.content,
       attachment_name: attachment.attachment_name,
       attachment_url: attachment.attachment_url,
-      due_date: form.due_date,
       class_id: selectedCourse.value.class_id,
       subject_id: selectedCourse.value.id
     })
-    ElMessage.success('作业已发布')
+    ElMessage.success('资料已发布')
     dialogVisible.value = false
-    await loadHomeworks()
+    await loadMaterials()
   } finally {
     submitting.value = false
   }
 }
 
-const viewHomework = async row => {
-  currentHomework.value = await api.homework.get(row.id)
+const viewMaterial = async row => {
+  currentMaterial.value = await api.materials.get(row.id)
   detailVisible.value = true
 }
 
@@ -265,15 +253,17 @@ const openAttachment = row => {
   window.open(row.attachment_url, '_blank', 'noopener')
 }
 
-const deleteHomework = async row => {
+const canDeleteMaterial = row => userStore.isAdmin || row.created_by === userStore.userInfo?.id
+
+const deleteMaterial = async row => {
   try {
-    await ElMessageBox.confirm(`确认删除作业“${row.title}”吗？`, '删除作业', { type: 'warning' })
-    await api.homework.delete(row.id)
-    ElMessage.success('作业已删除')
-    await loadHomeworks()
+    await ElMessageBox.confirm(`确认删除资料“${row.title}”吗？`, '删除资料', { type: 'warning' })
+    await api.materials.delete(row.id)
+    ElMessage.success('资料已删除')
+    await loadMaterials()
   } catch (error) {
     if (error !== 'cancel') {
-      console.error('删除作业失败', error)
+      console.error('删除资料失败', error)
     }
   }
 }
@@ -284,16 +274,16 @@ const formatDate = value => {
 }
 
 onMounted(() => {
-  loadHomeworks()
+  loadMaterials()
 })
 
 watch(selectedCourse, () => {
-  loadHomeworks()
+  loadMaterials()
 })
 </script>
 
 <style scoped>
-.homework-page {
+.materials-page {
   padding: 24px;
 }
 

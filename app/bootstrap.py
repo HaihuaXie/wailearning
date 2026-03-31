@@ -2,6 +2,7 @@ import re
 
 from sqlalchemy import text
 
+from app.attachments import ensure_upload_directories
 from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
@@ -49,6 +50,10 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
+        "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
+        "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
     ]
 
     with engine.begin() as connection:
@@ -137,6 +142,7 @@ def sync_existing_courses(db) -> None:
 
 
 def bootstrap() -> None:
+    ensure_upload_directories()
     Base.metadata.create_all(bind=engine)
     ensure_schema_updates()
     Base.metadata.create_all(bind=engine)

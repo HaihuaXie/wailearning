@@ -136,6 +136,21 @@ const api = {
     delete: id => http.delete(`/notifications/${id}`),
     markRead: id => http.post(`/notifications/${id}/read`),
     markAllRead: params => http.post('/notifications/mark-all-read', null, { params })
+  },
+  materials: {
+    list: params => http.get('/materials', { params }),
+    get: id => http.get(`/materials/${id}`),
+    create: data => http.post('/materials', data),
+    delete: id => http.delete(`/materials/${id}`)
+  },
+  files: {
+    upload: file => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return http.post('/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    }
   }
 }
 

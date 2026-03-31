@@ -78,6 +78,13 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class AttachmentUploadResponse(BaseModel):
+    attachment_name: str
+    attachment_url: str
+    content_type: Optional[str] = None
+    size: int
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -541,6 +548,8 @@ class SystemSettingsResponse(BaseModel):
 class HomeworkBase(BaseModel):
     title: str
     content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
     class_id: int
     subject_id: Optional[int] = None
     due_date: Optional[datetime] = None
@@ -553,6 +562,9 @@ class HomeworkCreate(HomeworkBase):
 class HomeworkUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    remove_attachment: bool = False
     subject_id: Optional[int] = None
     due_date: Optional[datetime] = None
 
@@ -578,6 +590,8 @@ class HomeworkListResponse(BaseModel):
 class NotificationBase(BaseModel):
     title: str
     content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
     priority: str = "normal"
     is_pinned: bool = False
     class_id: Optional[int] = None
@@ -591,6 +605,9 @@ class NotificationCreate(NotificationBase):
 class NotificationUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    remove_attachment: bool = False
     priority: Optional[str] = None
     is_pinned: Optional[bool] = None
     class_id: Optional[int] = None
@@ -615,3 +632,34 @@ class NotificationListResponse(BaseModel):
     total: int
     unread_count: int
     data: List[NotificationResponse]
+
+
+class CourseMaterialBase(BaseModel):
+    title: str
+    content: Optional[str] = None
+    attachment_name: Optional[str] = None
+    attachment_url: Optional[str] = None
+    class_id: int
+    subject_id: Optional[int] = None
+
+
+class CourseMaterialCreate(CourseMaterialBase):
+    pass
+
+
+class CourseMaterialResponse(CourseMaterialBase):
+    id: int
+    created_by: int
+    created_at: datetime
+    updated_at: datetime
+    class_name: Optional[str] = None
+    subject_name: Optional[str] = None
+    creator_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CourseMaterialListResponse(BaseModel):
+    total: int
+    data: List[CourseMaterialResponse]

@@ -232,6 +232,7 @@ const currentRouteName = computed(() => {
     '/points': '积分系统',
     '/points-display': '积分展示',
     '/settings': '系统设置',
+    '/materials': '课程资料',
     '/homework': '作业管理',
     '/notifications': '通知中心'
   }
@@ -250,11 +251,13 @@ const teacherMenu = [
   { path: '/rankings', label: '班级排名', icon: TrendCharts },
   { path: '/analysis', label: '数据分析', icon: DataAnalysis },
   { path: '/points', label: '积分系统', icon: Coin },
+  { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/homework', label: '作业管理', icon: Reading },
   { path: '/notifications', label: '通知中心', icon: Bell }
 ]
 
 const studentMenu = [
+  { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/homework', label: '作业', icon: Reading },
   { path: '/notifications', label: '通知', icon: Bell }
 ]

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.attachments import delete_attachment_file
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
@@ -24,6 +25,8 @@ def _serialize_homework(homework: Homework) -> HomeworkResponse:
         id=homework.id,
         title=homework.title,
         content=homework.content,
+        attachment_name=homework.attachment_name,
+        attachment_url=homework.attachment_url,
         class_id=homework.class_id,
         subject_id=homework.subject_id,
         due_date=homework.due_date,
@@ -112,6 +115,8 @@ def create_homework(
     homework = Homework(
         title=data.title,
         content=data.content,
+        attachment_name=data.attachment_name,
+        attachment_url=data.attachment_url,
         class_id=data.class_id,
         subject_id=data.subject_id,
         due_date=data.due_date,
@@ -150,6 +155,15 @@ def update_homework(
         homework.title = data.title
     if data.content is not None:
         homework.content = data.content
+    if data.remove_attachment:
+        delete_attachment_file(homework.attachment_url)
+        homework.attachment_name = None
+        homework.attachment_url = None
+    elif data.attachment_url is not None:
+        if homework.attachment_url and homework.attachment_url != data.attachment_url:
+            delete_attachment_file(homework.attachment_url)
+        homework.attachment_name = data.attachment_name
+        homework.attachment_url = data.attachment_url
     if data.subject_id is not None:
         homework.subject_id = data.subject_id
     if data.due_date is not None:
@@ -177,6 +191,7 @@ def delete_homework(
     if current_user.role != UserRole.ADMIN and homework.class_id not in allowed_class_ids:
         raise HTTPException(status_code=403, detail="You do not have access to this homework.")
 
+    delete_attachment_file(homework.attachment_url)
     db.delete(homework)
     db.commit()
     return {"message": "Homework deleted successfully."}

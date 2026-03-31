@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, or_
 from sqlalchemy.orm import Session
 
+from app.attachments import delete_attachment_file
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
@@ -49,6 +50,8 @@ def _serialize_notification(notification: Notification, current_user: User, db: 
         id=notification.id,
         title=notification.title,
         content=notification.content,
+        attachment_name=notification.attachment_name,
+        attachment_url=notification.attachment_url,
         priority=notification.priority,
         is_pinned=notification.is_pinned,
         class_id=notification.class_id,
@@ -139,6 +142,8 @@ def create_notification(
     notification = Notification(
         title=data.title,
         content=data.content,
+        attachment_name=data.attachment_name,
+        attachment_url=data.attachment_url,
         priority=data.priority,
         is_pinned=data.is_pinned,
         class_id=data.class_id,
@@ -186,6 +191,15 @@ def update_notification(
         notification.title = data.title
     if data.content is not None:
         notification.content = data.content
+    if data.remove_attachment:
+        delete_attachment_file(notification.attachment_url)
+        notification.attachment_name = None
+        notification.attachment_url = None
+    elif data.attachment_url is not None:
+        if notification.attachment_url and notification.attachment_url != data.attachment_url:
+            delete_attachment_file(notification.attachment_url)
+        notification.attachment_name = data.attachment_name
+        notification.attachment_url = data.attachment_url
     if data.priority is not None:
         notification.priority = data.priority
     if data.is_pinned is not None:
@@ -216,6 +230,7 @@ def delete_notification(
     if not is_admin(current_user) and notification.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own notifications.")
 
+    delete_attachment_file(notification.attachment_url)
     db.query(NotificationRead).filter(NotificationRead.notification_id == notification_id).delete()
     db.delete(notification)
     db.commit()

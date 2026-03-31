@@ -1,9 +1,11 @@
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.bootstrap import normalize_teacher_class_assignments
+from app.attachments import UPLOADS_DIR, ensure_upload_directories
+from app.bootstrap import ensure_schema_updates, normalize_teacher_class_assignments
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.routers import (
@@ -11,8 +13,10 @@ from app.routers import (
     auth,
     classes,
     dashboard,
+    files,
     homework,
     logs,
+    materials,
     notifications,
     parent,
     points,
@@ -57,13 +61,20 @@ app.include_router(semesters.router)
 app.include_router(logs.router)
 app.include_router(points.router)
 app.include_router(system_settings.router)
+app.include_router(files.router)
 app.include_router(homework.router)
+app.include_router(materials.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)
+
+ensure_upload_directories()
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 
 @app.on_event("startup")
 def startup_tasks():
+    Base.metadata.create_all(bind=engine)
+    ensure_schema_updates()
     db = SessionLocal()
     try:
         normalize_teacher_class_assignments(db)
