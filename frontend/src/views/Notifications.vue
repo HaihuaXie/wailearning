@@ -146,7 +146,7 @@ const loadNotifications = async () => {
     const result = await api.notifications.list({
       subject_id: selectedCourse.value.id,
       page: 1,
-      page_size: 200
+      page_size: 100
     })
     notifications.value = result?.data || []
     unreadCount.value = result?.unread_count || 0

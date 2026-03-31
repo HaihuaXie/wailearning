@@ -125,7 +125,7 @@ const buildParams = () => {
     class_id: selectedCourse.value.class_id,
     subject_id: selectedCourse.value.id,
     page: 1,
-    page_size: 200
+    page_size: 100
   }
 }
 
