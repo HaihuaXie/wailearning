@@ -1,6 +1,7 @@
 import re
 
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from app.attachments import ensure_upload_directories
 from app.auth import get_password_hash
@@ -47,6 +48,9 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_type VARCHAR NOT NULL DEFAULT 'required'",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'active'",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS semester VARCHAR",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS weekly_schedule VARCHAR",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_start_at TIMESTAMP",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_end_at TIMESTAMP",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
@@ -58,7 +62,22 @@ def ensure_schema_updates() -> None:
 
     with engine.begin() as connection:
         for statement in alter_statements:
-            connection.execute(text(statement))
+            if engine.dialect.name != "sqlite":
+                connection.execute(text(statement))
+                continue
+
+            sqlite_statement = (
+                statement
+                .replace(" ADD COLUMN IF NOT EXISTS ", " ADD COLUMN ")
+                .replace(" INTEGER REFERENCES users(id)", " INTEGER")
+                .replace(" INTEGER REFERENCES classes(id)", " INTEGER")
+                .replace(" INTEGER REFERENCES subjects(id)", " INTEGER")
+            )
+            try:
+                connection.execute(text(sqlite_statement))
+            except OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
 
 def seed_default_admin(db) -> None:

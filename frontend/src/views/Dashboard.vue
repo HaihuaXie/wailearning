@@ -6,11 +6,19 @@
         <p class="page-subtitle">
           {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先选择一门课程。' }}
         </p>
+        <p v-if="selectedCourse?.weekly_schedule || selectedCourse?.course_start_at || selectedCourse?.course_end_at" class="page-subtitle secondary-subtitle">
+          {{ selectedCourse?.weekly_schedule || '未设置每周时间' }} · {{ formatDateRange(selectedCourse?.course_start_at, selectedCourse?.course_end_at) }}
+        </p>
       </div>
-      <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
-        <el-option label="全部学期" value="" />
-        <el-option v-for="item in semesters" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
+      <div class="header-actions">
+        <el-button v-if="userStore.isTeacher || userStore.isClassTeacher" type="primary" plain @click="router.push('/courses')">
+          新建课程
+        </el-button>
+        <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
+          <el-option label="全部学期" value="" />
+          <el-option v-for="item in semesters" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+      </div>
     </div>
 
     <el-empty
@@ -67,12 +75,14 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { Clock, Collection, School, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 
+const router = useRouter()
 const userStore = useUserStore()
 const selectedCourse = computed(() => userStore.selectedCourse)
 
@@ -105,6 +115,21 @@ const buildQuery = () => ({
   semester: semester.value || undefined,
   subject_id: selectedCourse.value?.id
 })
+
+const formatDate = value => {
+  if (!value) {
+    return '未设置'
+  }
+  return new Date(value).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const formatDateRange = (startAt, endAt) => `${formatDate(startAt)} - ${formatDate(endAt)}`
 
 const loadSemesters = async () => {
   const data = await api.semesters.list()
@@ -208,8 +233,16 @@ watch(selectedCourse, async () => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 24px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .page-title {
@@ -221,6 +254,10 @@ watch(selectedCourse, async () => {
 .page-subtitle {
   margin: 0;
   color: #64748b;
+}
+
+.secondary-subtitle {
+  margin-top: 6px;
 }
 
 .stats-row,

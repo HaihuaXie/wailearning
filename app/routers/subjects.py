@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,13 +8,14 @@ from app.course_access import (
     ensure_course_access,
     get_accessible_courses_query,
     get_enrolled_students,
-    remove_optional_course_enrollment,
+    remove_course_enrollment,
     sync_course_enrollments,
 )
 from app.database import get_db
-from app.models import Class, CourseEnrollment, Subject, User, UserRole
+from app.models import Class, CourseEnrollment, Student, Subject, User, UserRole
 from app.schemas import (
     CourseEnrollmentResponse,
+    CourseRosterStudentInput,
     SubjectCreate,
     SubjectResponse,
     SubjectUpdate,
@@ -34,6 +35,9 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
         course_type=course.course_type or "required",
         status=course.status or "active",
         semester=course.semester,
+        weekly_schedule=course.weekly_schedule,
+        course_start_at=course.course_start_at,
+        course_end_at=course.course_end_at,
         description=course.description,
         teacher_name=course.teacher.real_name if course.teacher else None,
         class_name=course.class_obj.name if course.class_obj else None,
@@ -54,6 +58,56 @@ def _serialize_enrollment(enrollment: CourseEnrollment) -> CourseEnrollmentRespo
         student_no=enrollment.student.student_no if enrollment.student else None,
         class_name=enrollment.class_obj.name if enrollment.class_obj else None,
     )
+
+
+def _can_create_course(current_user: User) -> bool:
+    return current_user.role in [UserRole.ADMIN, UserRole.CLASS_TEACHER, UserRole.TEACHER]
+
+
+def _normalize_course_class_name(subject_data: SubjectCreate) -> str:
+    if subject_data.class_name and subject_data.class_name.strip():
+        return subject_data.class_name.strip()
+    return f"{subject_data.name.strip()}课程班"
+
+
+def _create_roster_students(
+    course: Subject,
+    students: List[CourseRosterStudentInput],
+    db: Session,
+    current_user: User,
+) -> None:
+    seen_student_nos = set()
+    for item in students:
+        student_name = item.name.strip()
+        student_no = item.student_no.strip()
+        if not student_name:
+            raise HTTPException(status_code=400, detail="Student name is required.")
+        if not student_no:
+            raise HTTPException(status_code=400, detail="Student number is required.")
+        if student_no in seen_student_nos:
+            raise HTTPException(status_code=400, detail=f"Duplicate student number in upload: {student_no}")
+        seen_student_nos.add(student_no)
+
+        existing_student = (
+            db.query(Student)
+            .filter(Student.class_id == course.class_id, Student.student_no == student_no)
+            .first()
+        )
+        if existing_student:
+            raise HTTPException(status_code=400, detail=f"Student number already exists in this course roster: {student_no}")
+
+        db.add(
+            Student(
+                name=student_name,
+                student_no=student_no,
+                gender=item.gender,
+                phone=item.phone,
+                parent_phone=item.parent_phone,
+                address=item.address,
+                class_id=course.class_id,
+                teacher_id=current_user.id if current_user.role == UserRole.TEACHER.value else course.teacher_id,
+            )
+        )
 
 
 @router.get("", response_model=List[SubjectResponse])
@@ -91,18 +145,34 @@ def create_subject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only administrators can create courses.")
+    if not _can_create_course(current_user):
+        raise HTTPException(status_code=403, detail="You do not have permission to create courses.")
 
-    class_obj = db.query(Class).filter(Class.id == subject_data.class_id).first()
-    if not class_obj:
-        raise HTTPException(status_code=400, detail="Class not found.")
+    if subject_data.course_end_at and subject_data.course_start_at and subject_data.course_end_at < subject_data.course_start_at:
+        raise HTTPException(status_code=400, detail="Course end time must be later than start time.")
+
+    target_teacher_id: Optional[int] = subject_data.teacher_id
+    if current_user.role != UserRole.ADMIN:
+        target_teacher_id = current_user.id
+
+    class_obj = None
+    if subject_data.class_id is not None:
+        class_obj = db.query(Class).filter(Class.id == subject_data.class_id).first()
+        if not class_obj:
+            raise HTTPException(status_code=400, detail="Class not found.")
+
+    if class_obj is None:
+        if not subject_data.students:
+            raise HTTPException(status_code=400, detail="Please upload a student roster or choose an existing class.")
+        class_obj = Class(name=_normalize_course_class_name(subject_data), grade=1)
+        db.add(class_obj)
+        db.flush()
 
     existing = (
         db.query(Subject)
         .filter(
             Subject.name == subject_data.name,
-            Subject.class_id == subject_data.class_id,
+            Subject.class_id == class_obj.id,
             Subject.semester == subject_data.semester,
         )
         .first()
@@ -112,15 +182,23 @@ def create_subject(
 
     course = Subject(
         name=subject_data.name,
-        teacher_id=subject_data.teacher_id,
-        class_id=subject_data.class_id,
+        teacher_id=target_teacher_id,
+        class_id=class_obj.id,
         course_type=subject_data.course_type,
         status=subject_data.status,
         semester=subject_data.semester,
+        weekly_schedule=subject_data.weekly_schedule,
+        course_start_at=subject_data.course_start_at,
+        course_end_at=subject_data.course_end_at,
         description=subject_data.description,
     )
     db.add(course)
     db.flush()
+
+    if subject_data.students:
+        _create_roster_students(course, subject_data.students, db, current_user)
+        db.flush()
+
     sync_course_enrollments(course, db)
     db.commit()
     db.refresh(course)
@@ -134,8 +212,15 @@ def update_subject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only administrators can update courses.")
+    if current_user.role == UserRole.ADMIN:
+        pass
+    else:
+        try:
+            ensure_course_access(subject_id, current_user, db)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Course not found.")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
@@ -143,7 +228,16 @@ def update_subject(
 
     original_class_id = course.class_id
 
-    for field in ["name", "teacher_id", "class_id", "course_type", "status", "semester", "description"]:
+    if subject_data.course_end_at and subject_data.course_start_at and subject_data.course_end_at < subject_data.course_start_at:
+        raise HTTPException(status_code=400, detail="Course end time must be later than start time.")
+
+    if current_user.role != UserRole.ADMIN and subject_data.teacher_id is not None and subject_data.teacher_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only assign yourself as the course teacher.")
+
+    if current_user.role != UserRole.ADMIN:
+        subject_data.teacher_id = current_user.id
+
+    for field in ["name", "teacher_id", "class_id", "course_type", "status", "semester", "weekly_schedule", "course_start_at", "course_end_at", "description"]:
         value = getattr(subject_data, field)
         if value is not None:
             setattr(course, field, value)
@@ -166,8 +260,15 @@ def delete_subject(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Only administrators can delete courses.")
+    if current_user.role == UserRole.ADMIN:
+        pass
+    else:
+        try:
+            ensure_course_access(subject_id, current_user, db)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Course not found.")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
     course = db.query(Subject).filter(Subject.id == subject_id).first()
     if not course:
@@ -213,11 +314,7 @@ def remove_subject_student(
     except PermissionError:
         raise HTTPException(status_code=403, detail="You do not have access to this course.")
 
-    try:
-        removed = remove_optional_course_enrollment(subject_id, student_id, db)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
+    removed = remove_course_enrollment(subject_id, student_id, db)
     if not removed:
         raise HTTPException(status_code=404, detail="Course student not found.")
 

@@ -76,9 +76,9 @@ def _serialize_submission(submission: HomeworkSubmission) -> HomeworkSubmissionR
 
 
 def _serialize_submission_status(
-    enrollment: CourseEnrollment | None,
-    submission: HomeworkSubmission | None,
-    fallback_student: Student | None = None,
+    enrollment: Optional[CourseEnrollment],
+    submission: Optional[HomeworkSubmission],
+    fallback_student: Optional[Student] = None,
 ) -> HomeworkSubmissionStatusResponse:
     student = enrollment.student if enrollment and enrollment.student else fallback_student
     class_obj = enrollment.class_obj if enrollment and enrollment.class_obj else (student.class_obj if student else None)

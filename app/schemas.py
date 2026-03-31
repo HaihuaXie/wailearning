@@ -173,11 +173,16 @@ class StudentListResponse(BaseModel):
 class SubjectCreate(BaseModel):
     name: str
     teacher_id: Optional[int] = None
-    class_id: int
+    class_id: Optional[int] = None
+    class_name: Optional[str] = None
     course_type: str = "required"
     status: str = "active"
     semester: Optional[str] = None
+    weekly_schedule: Optional[str] = None
+    course_start_at: Optional[datetime] = None
+    course_end_at: Optional[datetime] = None
     description: Optional[str] = None
+    students: Optional[List["CourseRosterStudentInput"]] = None
 
 
 class SubjectUpdate(BaseModel):
@@ -187,6 +192,9 @@ class SubjectUpdate(BaseModel):
     course_type: Optional[str] = None
     status: Optional[str] = None
     semester: Optional[str] = None
+    weekly_schedule: Optional[str] = None
+    course_start_at: Optional[datetime] = None
+    course_end_at: Optional[datetime] = None
     description: Optional[str] = None
 
 
@@ -198,6 +206,9 @@ class SubjectResponse(BaseModel):
     course_type: str = "required"
     status: str = "active"
     semester: Optional[str] = None
+    weekly_schedule: Optional[str] = None
+    course_start_at: Optional[datetime] = None
+    course_end_at: Optional[datetime] = None
     description: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None
@@ -221,6 +232,18 @@ class CourseEnrollmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CourseRosterStudentInput(BaseModel):
+    name: str
+    student_no: str
+    gender: Optional[Gender] = None
+    phone: Optional[str] = None
+    parent_phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+SubjectCreate.model_rebuild()
 
 
 class SemesterCreate(BaseModel):

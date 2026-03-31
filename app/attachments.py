@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
@@ -67,7 +68,7 @@ async def save_attachment(file: UploadFile, request: Request) -> dict[str, objec
     }
 
 
-def delete_attachment_file(attachment_url: str | None) -> None:
+def delete_attachment_file(attachment_url: Optional[str]) -> None:
     target_path = get_attachment_file_path(attachment_url)
     if not target_path:
         return
@@ -75,7 +76,7 @@ def delete_attachment_file(attachment_url: str | None) -> None:
         target_path.unlink()
 
 
-def get_attachment_file_path(attachment_url: str | None) -> Path | None:
+def get_attachment_file_path(attachment_url: Optional[str]) -> Optional[Path]:
     if not attachment_url:
         return None
 

@@ -106,6 +106,9 @@ class Subject(Base):
     course_type = Column(String, nullable=False, default="required")
     status = Column(String, nullable=False, default="active")
     semester = Column(String, nullable=True)
+    weekly_schedule = Column(String, nullable=True)
+    course_start_at = Column(DateTime(timezone=True), nullable=True)
+    course_end_at = Column(DateTime(timezone=True), nullable=True)
     description = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

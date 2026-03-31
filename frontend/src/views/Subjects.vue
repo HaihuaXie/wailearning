@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">课程管理</h1>
-        <p class="page-subtitle">创建课程时可指定课程类型、班级和任课老师，系统会自动同步班级学生到课程名单。</p>
+        <p class="page-subtitle">教师新建的课程会自动同步到这里，管理员可以统一查看、编辑课程排期与任课信息。</p>
       </div>
       <el-button type="primary" @click="openCreateDialog">
         新建课程
@@ -30,9 +30,15 @@
           </template>
         </el-table-column>
         <el-table-column prop="semester" label="学期" width="140" />
+        <el-table-column prop="weekly_schedule" label="每周上课时间" min-width="180" show-overflow-tooltip />
+        <el-table-column label="课程起止" min-width="240">
+          <template #default="{ row }">
+            {{ formatDateRange(row.course_start_at, row.course_end_at) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="student_count" label="学生数" width="100" />
         <el-table-column prop="description" label="课程简介" min-width="220" show-overflow-tooltip />
-        <el-table-column label="操作" width="200">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button type="danger" size="small" @click="deleteCourse(row)">删除</el-button>
@@ -44,7 +50,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingCourse ? '编辑课程' : '新建课程'"
-      width="620px"
+      width="680px"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
@@ -77,6 +83,27 @@
           <el-select v-model="form.semester" placeholder="请选择学期" style="width: 100%" clearable>
             <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.name" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="每周时间" prop="weekly_schedule">
+          <el-input v-model="form.weekly_schedule" placeholder="例如：每周三 19:00-21:00" />
+        </el-form-item>
+        <el-form-item label="开始时间" prop="course_start_at">
+          <el-date-picker
+            v-model="form.course_start_at"
+            type="datetime"
+            placeholder="选择开始时间"
+            style="width: 100%"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
+        </el-form-item>
+        <el-form-item label="结束时间" prop="course_end_at">
+          <el-date-picker
+            v-model="form.course_end_at"
+            type="datetime"
+            placeholder="选择结束时间"
+            style="width: 100%"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+          />
         </el-form-item>
         <el-form-item label="课程简介" prop="description">
           <el-input v-model="form.description" type="textarea" :rows="4" />
@@ -114,6 +141,9 @@ const form = reactive({
   course_type: 'required',
   status: 'active',
   semester: '',
+  weekly_schedule: '',
+  course_start_at: '',
+  course_end_at: '',
   description: ''
 })
 
@@ -121,7 +151,9 @@ const rules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
   class_id: [{ required: true, message: '请选择所属班级', trigger: 'change' }],
   course_type: [{ required: true, message: '请选择课程类型', trigger: 'change' }],
-  status: [{ required: true, message: '请选择课程状态', trigger: 'change' }]
+  status: [{ required: true, message: '请选择课程状态', trigger: 'change' }],
+  course_start_at: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
+  course_end_at: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
 }
 
 const resetForm = () => {
@@ -132,6 +164,9 @@ const resetForm = () => {
     course_type: 'required',
     status: 'active',
     semester: '',
+    weekly_schedule: '',
+    course_start_at: '',
+    course_end_at: '',
     description: ''
   })
 }
@@ -171,10 +206,28 @@ const openEditDialog = course => {
     course_type: course.course_type || 'required',
     status: course.status || 'active',
     semester: course.semester || '',
+    weekly_schedule: course.weekly_schedule || '',
+    course_start_at: course.course_start_at || '',
+    course_end_at: course.course_end_at || '',
     description: course.description || ''
   })
   dialogVisible.value = true
 }
+
+const formatDate = dateStr => {
+  if (!dateStr) {
+    return '未设置'
+  }
+  return new Date(dateStr).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const formatDateRange = (startAt, endAt) => `${formatDate(startAt)} - ${formatDate(endAt)}`
 
 const submitForm = async () => {
   await formRef.value.validate()

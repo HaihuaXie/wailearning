@@ -120,7 +120,7 @@ def sync_student_course_enrollments(student: Student, db: Session) -> int:
     return created
 
 
-def remove_optional_course_enrollment(course_id: int, student_id: int, db: Session) -> bool:
+def remove_course_enrollment(course_id: int, student_id: int, db: Session) -> bool:
     enrollment = (
         db.query(CourseEnrollment)
         .filter(
@@ -131,8 +131,6 @@ def remove_optional_course_enrollment(course_id: int, student_id: int, db: Sessi
     )
     if not enrollment:
         return False
-    if not enrollment.can_remove:
-        raise ValueError("Required course students cannot be removed.")
 
     db.delete(enrollment)
     return True

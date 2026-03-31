@@ -15,12 +15,8 @@
     <template v-else>
       <el-alert
         v-if="!isAdminView && selectedCourse"
-        :title="
-          selectedCourse.course_type === 'elective'
-            ? '当前为选修课，可移除学生。'
-            : '当前为必修课，系统已自动加入班级全部学生，且不可移除。'
-        "
-        :type="selectedCourse.course_type === 'elective' ? 'warning' : 'info'"
+        title="当前课程学生名单支持手动删除学生。"
+        type="warning"
         :closable="false"
         class="info-alert"
       />
@@ -89,8 +85,8 @@
             <el-table-column prop="class_name" label="所属班级" width="180" />
             <el-table-column label="选课方式" width="120">
               <template #default="{ row }">
-                <el-tag :type="row.can_remove ? 'warning' : 'success'">
-                  {{ row.can_remove ? '可移除' : '固定成员' }}
+                <el-tag type="warning">
+                  可删除
                 </el-tag>
               </template>
             </el-table-column>
@@ -99,7 +95,6 @@
                 <el-button
                   type="danger"
                   size="small"
-                  :disabled="!row.can_remove"
                   @click="removeStudent(row)"
                 >
                   删除
