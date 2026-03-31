@@ -58,7 +58,7 @@
             <el-radio label="student">学生</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="所属班级" prop="class_id">
+        <el-form-item v-if="showClassAssignmentField" label="所属班级" prop="class_id">
           <el-select v-model="form.class_id" placeholder="可选" style="width: 100%" clearable>
             <el-option v-for="item in classes" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
@@ -119,6 +119,17 @@ const roleTag = role => ({
   student: 'info'
 }[role] || '')
 
+const showClassAssignmentField = computed(() => form.role !== 'teacher')
+
+watch(
+  () => form.role,
+  role => {
+    if (role === 'teacher') {
+      form.class_id = null
+    }
+  }
+)
+
 const resetForm = () => {
   Object.assign(form, {
     username: '',
@@ -156,26 +167,32 @@ const openEditDialog = user => {
     password: '',
     real_name: user.real_name,
     role: user.role,
-    class_id: user.class_id,
+    class_id: user.role === 'teacher' ? null : user.class_id,
     is_active: user.is_active
   })
   dialogVisible.value = true
 }
 
+const buildPayload = () => ({
+  ...form,
+  class_id: form.role === 'teacher' ? null : form.class_id
+})
+
 const submitForm = async () => {
   await formRef.value.validate()
   submitting.value = true
   try {
+    const payload = buildPayload()
     if (editingUser.value) {
       await api.users.update(editingUser.value.id, {
-        real_name: form.real_name,
-        role: form.role,
-        class_id: form.class_id,
-        is_active: form.is_active
+        real_name: payload.real_name,
+        role: payload.role,
+        class_id: payload.class_id,
+        is_active: payload.is_active
       })
       ElMessage.success('用户已更新')
     } else {
-      await api.users.create({ ...form })
+      await api.users.create(payload)
       ElMessage.success('用户已创建')
     }
     dialogVisible.value = false

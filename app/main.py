@@ -3,8 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.bootstrap import normalize_teacher_class_assignments
 from app.config import settings
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
 from app.routers import (
     attendance,
     auth,
@@ -59,6 +60,15 @@ app.include_router(system_settings.router)
 app.include_router(homework.router)
 app.include_router(notifications.router)
 app.include_router(parent.router)
+
+
+@app.on_event("startup")
+def startup_tasks():
+    db = SessionLocal()
+    try:
+        normalize_teacher_class_assignments(db)
+    finally:
+        db.close()
 
 
 @app.get("/")

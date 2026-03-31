@@ -6,7 +6,7 @@ from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
 from app.database import Base, SessionLocal, engine
-from app.models import Semester, Subject, SystemSetting, User
+from app.models import Semester, Subject, SystemSetting, User, UserRole
 
 
 DEFAULT_SEMESTERS = [
@@ -114,6 +114,17 @@ def seed_default_system_settings(db) -> None:
     print(f"Ensured default system settings. Added {created} item(s), updated {updated} item(s).")
 
 
+def normalize_teacher_class_assignments(db) -> None:
+    updated = (
+        db.query(User)
+        .filter(User.role == UserRole.TEACHER.value, User.class_id.isnot(None))
+        .update({User.class_id: None}, synchronize_session=False)
+    )
+    if updated:
+        db.commit()
+    print(f"Ensured teacher class assignments. Cleared {updated} item(s).")
+
+
 def sync_existing_courses(db) -> None:
     synced = 0
     courses = db.query(Subject).filter(Subject.class_id.isnot(None)).all()
@@ -132,6 +143,7 @@ def bootstrap() -> None:
 
     db = SessionLocal()
     try:
+        normalize_teacher_class_assignments(db)
         if settings.INIT_DEFAULT_DATA:
             seed_default_admin(db)
             seed_default_semesters(db)

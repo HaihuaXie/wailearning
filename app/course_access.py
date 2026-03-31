@@ -18,10 +18,18 @@ def get_accessible_courses_query(user: User, db: Session):
             return query.filter(False)
         return query.filter(Subject.class_id == user.class_id)
 
-    teacher_course_query = query.filter(Subject.teacher_id == user.id)
-    if user.class_id:
-        return teacher_course_query.union(query.filter(Subject.class_id == user.class_id))
-    return teacher_course_query
+    if user.role == UserRole.TEACHER:
+        return query.filter(Subject.teacher_id == user.id)
+
+    if user.role == UserRole.CLASS_TEACHER:
+        class_course_query = query
+        if user.class_id:
+            class_course_query = query.filter(Subject.class_id == user.class_id)
+        else:
+            class_course_query = query.filter(False)
+        return class_course_query.union(query.filter(Subject.teacher_id == user.id))
+
+    return query.filter(False)
 
 
 def get_accessible_course_ids(user: User, db: Session) -> list[int]:
@@ -33,7 +41,7 @@ def get_accessible_class_ids_from_courses(user: User, db: Session) -> list[int]:
         return [class_obj.id for class_obj in db.query(Class).all()]
 
     class_ids = set()
-    if user.class_id:
+    if user.role == UserRole.CLASS_TEACHER and user.class_id:
         class_ids.add(user.class_id)
 
     for course in get_accessible_courses_query(user, db).all():
