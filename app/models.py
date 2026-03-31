@@ -129,6 +129,7 @@ class CourseEnrollment(Base):
     subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    enrollment_type = Column(String, nullable=False, default="required")
     can_remove = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -157,6 +158,23 @@ class Score(Base):
     student = relationship("Student", back_populates="scores")
     subject = relationship("Subject", back_populates="scores")
     class_obj = relationship("Class", back_populates="scores")
+
+
+class CourseExamWeight(Base):
+    __tablename__ = "course_exam_weights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), nullable=False)
+    exam_type = Column(String, nullable=False)
+    weight = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("subject_id", "exam_type", name="uq_course_exam_weight_subject_exam_type"),
+    )
+
+    subject = relationship("Subject")
 
 
 class Attendance(Base):

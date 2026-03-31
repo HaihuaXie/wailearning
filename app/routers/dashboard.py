@@ -56,9 +56,14 @@ def get_dashboard_stats(
     if selected_course:
         attendance_query = attendance_query.filter(Attendance.subject_id == selected_course.id)
 
-    total_attendance = attendance_query.count()
-    present_attendance = attendance_query.filter(Attendance.status == "present").count()
-    attendance_rate = round((present_attendance / total_attendance) * 100, 2) if total_attendance else 0
+    latest_attendance_date = attendance_query.with_entities(func.max(Attendance.date)).scalar()
+    if latest_attendance_date:
+        latest_attendance_query = attendance_query.filter(Attendance.date == latest_attendance_date)
+        total_attendance = latest_attendance_query.count()
+        present_attendance = latest_attendance_query.filter(Attendance.status == "present").count()
+        attendance_rate = round((present_attendance / total_attendance) * 100, 2) if total_attendance else 0
+    else:
+        attendance_rate = 0
 
     recent_scores = score_query.order_by(Score.created_at.desc()).limit(10).all()
     recent_score_list = []

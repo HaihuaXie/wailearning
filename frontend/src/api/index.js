@@ -47,7 +47,8 @@ const subjectsApi = {
   update: (id, data) => http.put(`/subjects/${id}`, data),
   delete: id => http.delete(`/subjects/${id}`),
   getStudents: id => http.get(`/subjects/${id}/students`),
-  removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`)
+  removeStudent: (subjectId, studentId) => http.delete(`/subjects/${subjectId}/students/${studentId}`),
+  updateEnrollmentType: (subjectId, studentId, data) => http.put(`/subjects/${subjectId}/students/${studentId}/enrollment-type`, data)
 }
 
 const api = {
@@ -88,9 +89,15 @@ const api = {
     list: params => http.get('/scores', { params }),
     get: id => http.get(`/scores/${id}`),
     create: data => http.post('/scores', data),
+    batchCreate: data =>
+      http.post('/scores/batch', JSON.stringify(data), {
+        headers: { 'Content-Type': 'application/json' }
+      }),
     update: (id, data) => http.put(`/scores/${id}`, data),
     delete: id => http.delete(`/scores/${id}`),
-    getStudentScores: (studentId, params) => http.get(`/scores/student/${studentId}`, { params })
+    getStudentScores: (studentId, params) => http.get(`/scores/student/${studentId}`, { params }),
+    getWeights: subjectId => http.get(`/scores/weights/${subjectId}`),
+    updateWeights: (subjectId, data) => http.put(`/scores/weights/${subjectId}`, data)
   },
   semesters: {
     list: () => http.get('/semesters'),

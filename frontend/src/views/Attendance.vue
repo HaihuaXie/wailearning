@@ -26,6 +26,16 @@
       </el-card>
 
       <el-card shadow="never">
+        <div class="toolbar">
+          <el-input
+            v-model="studentNameKeyword"
+            clearable
+            placeholder="搜索学生姓名"
+            style="width: 240px"
+            @input="loadAttendances"
+            @clear="loadAttendances"
+          />
+        </div>
         <el-table :data="attendances" v-loading="loading">
           <el-table-column prop="student_name" label="学生" min-width="180" />
           <el-table-column prop="date" label="日期" width="180">
@@ -132,6 +142,7 @@ const batchFormRef = ref(null)
 
 const students = ref([])
 const attendances = ref([])
+const studentNameKeyword = ref('')
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 
@@ -188,6 +199,7 @@ const loadAttendances = async () => {
     const result = await api.attendance.list({
       class_id: selectedCourse.value.class_id,
       subject_id: selectedCourse.value.id,
+      student_name: studentNameKeyword.value || undefined,
       page: 1,
       page_size: 1000
     })
@@ -345,6 +357,12 @@ watch(selectedCourse, async () => {
 
 .stats-card {
   margin-bottom: 20px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 @media (max-width: 768px) {

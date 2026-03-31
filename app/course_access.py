@@ -85,7 +85,8 @@ def sync_course_enrollments(course: Subject, db: Session) -> int:
                 subject_id=course.id,
                 student_id=student.id,
                 class_id=course.class_id,
-                can_remove=course.course_type == "elective",
+                enrollment_type=course.course_type or "required",
+                can_remove=(course.course_type or "required") == "elective",
             )
         )
         created += 1
@@ -112,7 +113,8 @@ def sync_student_course_enrollments(student: Student, db: Session) -> int:
                 subject_id=course.id,
                 student_id=student.id,
                 class_id=student.class_id,
-                can_remove=course.course_type == "elective",
+                enrollment_type=course.course_type or "required",
+                can_remove=(course.course_type or "required") == "elective",
             )
         )
         created += 1

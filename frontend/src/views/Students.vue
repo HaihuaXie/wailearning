@@ -85,8 +85,18 @@
             <el-table-column prop="class_name" label="所属班级" width="180" />
             <el-table-column label="选课方式" width="120">
               <template #default="{ row }">
-                <el-tag type="warning">
-                  可删除
+                <el-select
+                  v-if="canManageRoster"
+                  :model-value="row.enrollment_type || 'required'"
+                  size="small"
+                  style="width: 100%"
+                  @change="value => updateEnrollmentType(row, value)"
+                >
+                  <el-option label="必修" value="required" />
+                  <el-option label="选修" value="elective" />
+                </el-select>
+                <el-tag v-else :type="(row.enrollment_type || 'required') === 'elective' ? 'warning' : 'success'">
+                  {{ (row.enrollment_type || 'required') === 'elective' ? '选修' : '必修' }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -468,6 +478,26 @@ const removeStudent = async row => {
     if (error !== 'cancel') {
       console.error('移除学生失败', error)
     }
+  }
+}
+
+const updateEnrollmentType = async (row, value) => {
+  if (!selectedCourse.value) {
+    return
+  }
+
+  try {
+    const updated = await api.courses.updateEnrollmentType(selectedCourse.value.id, row.student_id, {
+      enrollment_type: value
+    })
+    const target = students.value.find(item => item.student_id === row.student_id)
+    if (target) {
+      Object.assign(target, updated)
+    }
+    ElMessage.success(`已切换为${value === 'elective' ? '选修' : '必修'}`)
+  } catch (error) {
+    console.error('更新选课方式失败', error)
+    await loadStudents()
   }
 }
 

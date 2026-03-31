@@ -195,12 +195,13 @@ import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const userStore = useUserStore()
-const TEMPLATE_HEADERS = ['姓名', '性别', '学号', '手机号', '家长手机号', '地址']
+const TEMPLATE_HEADERS = ['姓名', '性别', '学号', '选课方式', '手机号', '家长手机号', '地址']
 const TEMPLATE_ROWS = [
   {
     姓名: '张三',
     性别: '男',
     学号: '2026001',
+    选课方式: '必修',
     手机号: '13800000000',
     家长手机号: '13900000000',
     地址: '上海市浦东新区'
@@ -345,6 +346,17 @@ const normalizeGenderInput = value => {
   return genderMap[gender] || ''
 }
 
+const normalizeEnrollmentTypeInput = value => {
+  const normalized = normalizeCellValue(value).replace(/\s+/g, '').toLowerCase()
+  const enrollmentTypeMap = {
+    必修: 'required',
+    required: 'required',
+    选修: 'elective',
+    elective: 'elective'
+  }
+  return enrollmentTypeMap[normalized] || 'required'
+}
+
 const downloadBlob = (blob, filename) => {
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -403,6 +415,9 @@ const parseImportRows = rows => {
     const name = pickRowValue(row, ['姓名', '学生姓名', 'name', 'studentname'].map(normalizeHeaderKey))
     const studentNo = pickRowValue(row, ['学号', '学员编号', '学生编号', 'studentno', 'student_no', 'studentid', '编号'].map(normalizeHeaderKey))
     const gender = normalizeGenderInput(pickRowValue(row, ['性别', 'gender'].map(normalizeHeaderKey)))
+    const enrollmentType = normalizeEnrollmentTypeInput(
+      pickRowValue(row, ['选课方式', '课程类型', '修读方式', 'enrollmenttype', 'coursetype'].map(normalizeHeaderKey))
+    )
     const phone = pickRowValue(row, ['手机号', '手机号码', '联系电话', 'phone', 'mobile'].map(normalizeHeaderKey))
     const parentPhone = pickRowValue(row, ['家长手机号', '家长电话', '监护人电话', 'parentphone', 'guardianphone'].map(normalizeHeaderKey))
     const address = pickRowValue(row, ['地址', '住址', '家庭住址', 'address'].map(normalizeHeaderKey))
@@ -424,6 +439,7 @@ const parseImportRows = rows => {
     students.push({
       name,
       student_no: studentNo,
+      enrollment_type: enrollmentType,
       gender: gender || null,
       phone: phone || null,
       parent_phone: parentPhone || null,

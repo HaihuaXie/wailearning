@@ -108,7 +108,7 @@ const statCards = computed(() => [
   { label: '学生总数', value: stats.total_students, color: '#2563eb', icon: User },
   { label: '关联班级', value: stats.total_classes, color: '#16a34a', icon: School },
   { label: '成绩记录', value: stats.total_scores, color: '#d97706', icon: Collection },
-  { label: '考勤率', value: `${stats.attendance_rate}%`, color: '#dc2626', icon: Clock }
+  { label: '最近一次考勤率', value: `${stats.attendance_rate}%`, color: '#dc2626', icon: Clock }
 ])
 
 const buildQuery = () => ({

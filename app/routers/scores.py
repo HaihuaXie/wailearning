@@ -7,9 +7,16 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_active_user
 from app.course_access import ensure_course_access
 from app.database import get_db
-from app.models import Score, Student, Subject, User, UserRole
+from app.models import CourseExamWeight, Score, Student, Subject, User, UserRole
 from app.routers.classes import get_accessible_class_ids
-from app.schemas import ScoreCreate, ScoreListResponse, ScoreResponse, ScoreUpdate
+from app.schemas import (
+    CourseExamWeightResponse,
+    CourseExamWeightUpdateRequest,
+    ScoreCreate,
+    ScoreListResponse,
+    ScoreResponse,
+    ScoreUpdate,
+)
 
 
 router = APIRouter(prefix="/api/scores", tags=["成绩管理"])
@@ -35,6 +42,38 @@ def _serialize_score(score: Score) -> ScoreResponse:
         subject_name=score.subject.name if score.subject else None,
         class_name=score.class_obj.name if score.class_obj else None,
     )
+
+
+def _serialize_exam_weight(item: CourseExamWeight) -> CourseExamWeightResponse:
+    return CourseExamWeightResponse(
+        id=item.id,
+        subject_id=item.subject_id,
+        exam_type=item.exam_type,
+        weight=item.weight,
+    )
+
+
+def _validate_score_uniqueness(
+    db: Session,
+    *,
+    student_id: int,
+    subject_id: int,
+    semester: str,
+    exam_type: str,
+    exclude_score_id: Optional[int] = None,
+) -> None:
+    query = db.query(Score).filter(
+        Score.student_id == student_id,
+        Score.subject_id == subject_id,
+        Score.semester == semester,
+        Score.exam_type == exam_type,
+    )
+    if exclude_score_id is not None:
+        query = query.filter(Score.id != exclude_score_id)
+
+    existing = query.first()
+    if existing:
+        raise HTTPException(status_code=400, detail="同一学生在该课程下的同一考试类型成绩不能重复录入。")
 
 
 @router.get("", response_model=ScoreListResponse)
@@ -92,6 +131,14 @@ def create_score(
     if subject.class_id and subject.class_id != score_data.class_id:
         raise HTTPException(status_code=400, detail="The selected course does not belong to this class.")
 
+    _validate_score_uniqueness(
+        db,
+        student_id=score_data.student_id,
+        subject_id=score_data.subject_id,
+        semester=score_data.semester,
+        exam_type=score_data.exam_type,
+    )
+
     score = Score(
         student_id=score_data.student_id,
         subject_id=score_data.subject_id,
@@ -105,6 +152,70 @@ def create_score(
     db.commit()
     db.refresh(score)
     return _serialize_score(score)
+
+
+@router.get("/weights/{subject_id}", response_model=list[CourseExamWeightResponse])
+def get_course_exam_weights(
+    subject_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    ensure_course_access(subject_id, current_user, db)
+    items = (
+        db.query(CourseExamWeight)
+        .filter(CourseExamWeight.subject_id == subject_id)
+        .order_by(CourseExamWeight.exam_type.asc())
+        .all()
+    )
+    return [_serialize_exam_weight(item) for item in items]
+
+
+@router.put("/weights/{subject_id}", response_model=list[CourseExamWeightResponse])
+def update_course_exam_weights(
+    subject_id: int,
+    payload: CourseExamWeightUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    _ensure_score_write_access(current_user)
+    ensure_course_access(subject_id, current_user, db)
+
+    if not payload.items:
+        db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).delete()
+        db.commit()
+        return []
+
+    seen_exam_types = set()
+    total_weight = 0.0
+    normalized_items = []
+    for item in payload.items:
+        exam_type = item.exam_type.strip()
+        if not exam_type:
+            raise HTTPException(status_code=400, detail="考试类型不能为空。")
+        normalized_key = exam_type.lower()
+        if normalized_key in seen_exam_types:
+            raise HTTPException(status_code=400, detail="考试类型不能重复。")
+        if item.weight <= 0:
+            raise HTTPException(status_code=400, detail="考试占比必须大于 0。")
+        seen_exam_types.add(normalized_key)
+        total_weight += item.weight
+        normalized_items.append((exam_type, item.weight))
+
+    if round(total_weight, 2) != 100:
+        raise HTTPException(status_code=400, detail="考试占比总和必须等于 100。")
+
+    db.query(CourseExamWeight).filter(CourseExamWeight.subject_id == subject_id).delete()
+    for exam_type, weight in normalized_items:
+        db.add(CourseExamWeight(subject_id=subject_id, exam_type=exam_type, weight=weight))
+    db.commit()
+
+    items = (
+        db.query(CourseExamWeight)
+        .filter(CourseExamWeight.subject_id == subject_id)
+        .order_by(CourseExamWeight.exam_type.asc())
+        .all()
+    )
+    return [_serialize_exam_weight(item) for item in items]
 
 
 @router.put("/{score_id}", response_model=ScoreResponse)
@@ -125,6 +236,18 @@ def update_score(
 
     if score_data.score is not None:
         score.score = score_data.score
+    next_exam_type = score_data.exam_type if score_data.exam_type is not None else score.exam_type
+    next_semester = score_data.semester if score_data.semester is not None else score.semester
+
+    _validate_score_uniqueness(
+        db,
+        student_id=score.student_id,
+        subject_id=score.subject_id,
+        semester=next_semester,
+        exam_type=next_exam_type,
+        exclude_score_id=score.id,
+    )
+
     if score_data.exam_type is not None:
         score.exam_type = score_data.exam_type
     if score_data.semester is not None:
@@ -218,6 +341,7 @@ async def create_scores_batch(
     class_ids = get_accessible_class_ids(current_user, db)
     results = []
     errors = []
+    seen_keys = set()
 
     for index, score_data in enumerate(scores_list, 1):
         if not isinstance(score_data, dict):
@@ -251,6 +375,25 @@ async def create_scores_batch(
             errors.append(f"Row {index}: selected course does not belong to this class.")
             continue
 
+        exam_type = score_data.get("exam_type", "期中考试")
+        semester = score_data.get("semester", "")
+        dedupe_key = (student.id, subject_id, semester, exam_type)
+        if dedupe_key in seen_keys:
+            errors.append(f"Row {index}: duplicate score for the same student and exam type in this batch.")
+            continue
+
+        try:
+            _validate_score_uniqueness(
+                db,
+                student_id=student.id,
+                subject_id=subject_id,
+                semester=semester,
+                exam_type=exam_type,
+            )
+        except HTTPException as exc:
+            errors.append(f"Row {index}: {exc.detail}")
+            continue
+
         try:
             score_value = float(score_data.get("score"))
         except (TypeError, ValueError):
@@ -274,11 +417,12 @@ async def create_scores_batch(
                 subject_id=subject_id,
                 class_id=class_id,
                 score=score_value,
-                exam_type=score_data.get("exam_type", "期中考试"),
+                exam_type=exam_type,
                 exam_date=exam_date,
-                semester=score_data.get("semester", ""),
+                semester=semester,
             )
         )
+        seen_keys.add(dedupe_key)
         results.append(f"{student.name}-{subject.name}")
 
     try:
@@ -288,3 +432,4 @@ async def create_scores_batch(
         errors.append(f"Database error: {exc}")
 
     return {"success": len(results), "failed": len(errors), "errors": errors}
+

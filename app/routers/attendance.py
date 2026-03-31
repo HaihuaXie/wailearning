@@ -40,6 +40,7 @@ def _serialize_attendance(attendance: Attendance) -> AttendanceResponse:
 def get_attendances(
     class_id: Optional[int] = None,
     student_id: Optional[int] = None,
+    student_name: Optional[str] = None,
     subject_id: Optional[int] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -58,6 +59,8 @@ def get_attendances(
         query = query.filter(Attendance.class_id == class_id)
     if student_id:
         query = query.filter(Attendance.student_id == student_id)
+    if student_name:
+        query = query.join(Student, Attendance.student_id == Student.id).filter(Student.name.contains(student_name))
     if subject_id:
         ensure_course_access(subject_id, current_user, db)
         query = query.filter(Attendance.subject_id == subject_id)

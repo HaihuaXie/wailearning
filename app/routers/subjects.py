@@ -15,6 +15,7 @@ from app.database import get_db
 from app.models import Class, CourseEnrollment, Student, Subject, User, UserRole
 from app.schemas import (
     CourseEnrollmentResponse,
+    CourseEnrollmentTypeUpdate,
     CourseRosterStudentInput,
     SubjectCreate,
     SubjectResponse,
@@ -47,12 +48,14 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
 
 
 def _serialize_enrollment(enrollment: CourseEnrollment) -> CourseEnrollmentResponse:
+    enrollment_type = enrollment.enrollment_type or ("elective" if enrollment.can_remove else "required")
     return CourseEnrollmentResponse(
         id=enrollment.id,
         subject_id=enrollment.subject_id,
         student_id=enrollment.student_id,
         class_id=enrollment.class_id,
-        can_remove=enrollment.can_remove,
+        enrollment_type=enrollment_type,
+        can_remove=enrollment_type == "elective",
         created_at=enrollment.created_at,
         student_name=enrollment.student.name if enrollment.student else None,
         student_no=enrollment.student.student_no if enrollment.student else None,
@@ -75,8 +78,9 @@ def _create_roster_students(
     students: List[CourseRosterStudentInput],
     db: Session,
     current_user: User,
-) -> None:
+) -> list[tuple[Student, str]]:
     seen_student_nos = set()
+    enrollment_overrides: list[tuple[Student, str]] = []
     for item in students:
         student_name = item.name.strip()
         student_no = item.student_no.strip()
@@ -96,18 +100,20 @@ def _create_roster_students(
         if existing_student:
             raise HTTPException(status_code=400, detail=f"Student number already exists in this course roster: {student_no}")
 
-        db.add(
-            Student(
-                name=student_name,
-                student_no=student_no,
-                gender=item.gender,
-                phone=item.phone,
-                parent_phone=item.parent_phone,
-                address=item.address,
-                class_id=course.class_id,
-                teacher_id=current_user.id if current_user.role == UserRole.TEACHER.value else course.teacher_id,
-            )
+        student = Student(
+            name=student_name,
+            student_no=student_no,
+            gender=item.gender,
+            phone=item.phone,
+            parent_phone=item.parent_phone,
+            address=item.address,
+            class_id=course.class_id,
+            teacher_id=current_user.id if current_user.role == UserRole.TEACHER.value else course.teacher_id,
         )
+        db.add(student)
+        enrollment_overrides.append((student, item.enrollment_type or "required"))
+
+    return enrollment_overrides
 
 
 @router.get("", response_model=List[SubjectResponse])
@@ -195,11 +201,29 @@ def create_subject(
     db.add(course)
     db.flush()
 
+    enrollment_overrides: list[tuple[Student, str]] = []
     if subject_data.students:
-        _create_roster_students(course, subject_data.students, db, current_user)
+        enrollment_overrides = _create_roster_students(course, subject_data.students, db, current_user)
         db.flush()
 
     sync_course_enrollments(course, db)
+    if enrollment_overrides:
+        db.flush()
+        for student, enrollment_type in enrollment_overrides:
+            if not student.id:
+                continue
+            enrollment = (
+                db.query(CourseEnrollment)
+                .filter(
+                    CourseEnrollment.subject_id == course.id,
+                    CourseEnrollment.student_id == student.id,
+                )
+                .first()
+            )
+            if enrollment:
+                normalized_enrollment_type = enrollment_type.strip().lower()
+                enrollment.enrollment_type = normalized_enrollment_type
+                enrollment.can_remove = normalized_enrollment_type == "elective"
     db.commit()
     db.refresh(course)
     return _serialize_course(course, db)
@@ -295,6 +319,46 @@ def get_subject_students(
 
     enrollments = get_enrolled_students(subject_id, db)
     return [_serialize_enrollment(enrollment) for enrollment in enrollments]
+
+
+@router.put("/{subject_id}/students/{student_id}/enrollment-type", response_model=CourseEnrollmentResponse)
+def update_subject_student_enrollment_type(
+    subject_id: int,
+    student_id: int,
+    payload: CourseEnrollmentTypeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if current_user.role == UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Students cannot modify course enrollment types.")
+
+    try:
+        ensure_course_access(subject_id, current_user, db)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Course not found.")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="You do not have access to this course.")
+
+    enrollment_type = payload.enrollment_type.strip().lower()
+    if enrollment_type not in {"required", "elective"}:
+        raise HTTPException(status_code=400, detail="Enrollment type must be required or elective.")
+
+    enrollment = (
+        db.query(CourseEnrollment)
+        .filter(
+            CourseEnrollment.subject_id == subject_id,
+            CourseEnrollment.student_id == student_id,
+        )
+        .first()
+    )
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Course student not found.")
+
+    enrollment.enrollment_type = enrollment_type
+    enrollment.can_remove = enrollment_type == "elective"
+    db.commit()
+    db.refresh(enrollment)
+    return _serialize_enrollment(enrollment)
 
 
 @router.delete("/{subject_id}/students/{student_id}")

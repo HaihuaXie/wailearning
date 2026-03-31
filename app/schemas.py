@@ -224,6 +224,7 @@ class CourseEnrollmentResponse(BaseModel):
     subject_id: int
     student_id: int
     class_id: int
+    enrollment_type: str = "required"
     can_remove: bool
     created_at: datetime
     student_name: Optional[str] = None
@@ -238,9 +239,14 @@ class CourseRosterStudentInput(BaseModel):
     name: str
     student_no: str
     gender: Optional[Gender] = None
+    enrollment_type: Optional[str] = None
     phone: Optional[str] = None
     parent_phone: Optional[str] = None
     address: Optional[str] = None
+
+
+class CourseEnrollmentTypeUpdate(BaseModel):
+    enrollment_type: str
 
 
 SubjectCreate.model_rebuild()
@@ -305,6 +311,23 @@ class ScoreResponse(ScoreBase):
 class ScoreListResponse(BaseModel):
     total: int
     data: List[ScoreResponse]
+
+
+class CourseExamWeightItem(BaseModel):
+    exam_type: str
+    weight: float
+
+
+class CourseExamWeightResponse(CourseExamWeightItem):
+    id: int
+    subject_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class CourseExamWeightUpdateRequest(BaseModel):
+    items: List[CourseExamWeightItem]
 
 
 class AttendanceBase(BaseModel):

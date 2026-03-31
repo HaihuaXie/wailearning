@@ -52,6 +52,18 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_start_at TIMESTAMP",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_end_at TIMESTAMP",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
+        "ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR NOT NULL DEFAULT 'required'",
+        """
+        CREATE TABLE IF NOT EXISTS course_exam_weights (
+            id INTEGER PRIMARY KEY,
+            subject_id INTEGER NOT NULL REFERENCES subjects(id),
+            exam_type VARCHAR NOT NULL,
+            weight FLOAT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT uq_course_exam_weight_subject_exam_type UNIQUE(subject_id, exam_type)
+        )
+        """,
         "ALTER TABLE attendances ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
@@ -78,6 +90,19 @@ def ensure_schema_updates() -> None:
             except OperationalError as exc:
                 if "duplicate column name" not in str(exc).lower():
                     raise
+
+        connection.execute(
+            text(
+                """
+                UPDATE course_enrollments
+                SET enrollment_type = CASE
+                    WHEN can_remove THEN 'elective'
+                    ELSE 'required'
+                END
+                WHERE enrollment_type IS NULL OR enrollment_type = ''
+                """
+            )
+        )
 
 
 def seed_default_admin(db) -> None:
