@@ -117,13 +117,13 @@ const routes = [
         path: 'homework/:id/submit',
         name: 'HomeworkSubmit',
         component: () => import('@/views/HomeworkSubmission.vue'),
-        meta: { title: '鎻愪氦浣滀笟' }
+        meta: { title: '提交作业' }
       },
       {
         path: 'homework/:id/submissions',
         name: 'HomeworkSubmissions',
         component: () => import('@/views/HomeworkSubmissions.vue'),
-        meta: { title: '瀛︾敓鎻愪氦' }
+        meta: { title: '学生提交' }
       },
       {
         path: 'materials',
