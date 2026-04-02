@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from fastapi import HTTPException, Request, UploadFile
 
+from app.config import settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR = Path(settings.UPLOADS_DIR).expanduser() if settings.UPLOADS_DIR else BASE_DIR / "uploads"
 ATTACHMENTS_DIR = UPLOADS_DIR / "attachments"
 MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024
 BLOCKED_ATTACHMENT_EXTENSIONS = {
@@ -28,10 +29,37 @@ BLOCKED_ATTACHMENT_CONTENT_TYPES = {
     "application/x-msdos-program",
     "application/vnd.microsoft.portable-executable",
 }
+ATTACHMENT_URL_PREFIXES = (
+    "/uploads/attachments/",
+    "/api/uploads/attachments/",
+    "uploads/attachments/",
+)
+
+
+def get_attachment_directories() -> list[Path]:
+    directories: list[Path] = []
+    seen: set[str] = set()
+    upload_roots = [
+        UPLOADS_DIR,
+        BASE_DIR / "uploads",
+        BASE_DIR.parent / "shared" / "uploads",
+        BASE_DIR.parent / "uploads",
+    ]
+
+    for uploads_dir in upload_roots:
+        attachments_dir = Path(uploads_dir) / "attachments"
+        normalized = str(attachments_dir)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        directories.append(attachments_dir)
+
+    return directories
 
 
 def ensure_upload_directories() -> None:
-    ATTACHMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    for attachments_dir in get_attachment_directories()[:1]:
+        attachments_dir.mkdir(parents=True, exist_ok=True)
 
 
 def validate_attachment_upload(file: UploadFile) -> str:
@@ -77,17 +105,38 @@ def delete_attachment_file(attachment_url: Optional[str]) -> None:
 
 
 def get_attachment_file_path(attachment_url: Optional[str]) -> Optional[Path]:
+    stored_name = get_attachment_stored_name(attachment_url)
+    if not stored_name:
+        return None
+
+    directories = get_attachment_directories()
+    for attachments_dir in directories:
+        candidate = attachments_dir / stored_name
+        if candidate.exists():
+            return candidate
+
+    return directories[0] / stored_name if directories else None
+
+
+def get_attachment_stored_name(attachment_url: Optional[str]) -> Optional[str]:
     if not attachment_url:
         return None
 
     parsed_url = urlparse(attachment_url)
-    attachment_path = unquote(parsed_url.path or "")
-    prefix = "/uploads/attachments/"
-    if not attachment_path.startswith(prefix):
-        return None
+    attachment_path = unquote(parsed_url.path or attachment_url).replace("\\", "/")
 
-    stored_name = Path(attachment_path[len(prefix):]).name
-    return ATTACHMENTS_DIR / stored_name
+    for prefix in ATTACHMENT_URL_PREFIXES:
+        if prefix in attachment_path:
+            suffix = attachment_path.split(prefix, 1)[1]
+            stored_name = Path(suffix).name
+            if stored_name:
+                return stored_name
+
+    fallback_name = Path(attachment_path).name
+    if fallback_name and fallback_name not in {"", ".", "..", "attachments"}:
+        return fallback_name
+
+    return None
 
 
 def get_attachment_download_name(attachment_url: Optional[str], attachment_name: Optional[str]) -> str:

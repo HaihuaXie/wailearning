@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    UPLOADS_DIR: str = ""
 
     BACKEND_CORS_ORIGINS_RAW: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:5174,http://127.0.0.1:5174",

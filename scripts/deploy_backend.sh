@@ -15,13 +15,20 @@ ENV_FILE="${ENV_FILE:-${SHARED_DIR}/.env.production}"
 APP_USER="${APP_USER:-ddclass}"
 SERVICE_FILE="/etc/systemd/system/ddclass-backend.service"
 PYTHON_BIN="${PYTHON_BIN:-}"
+SHARED_UPLOADS_DIR="${SHARED_DIR}/uploads"
 
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   echo "System user '${APP_USER}' does not exist. Run scripts/setup_server.sh first."
   exit 1
 fi
 
-install -d -m 0755 "${APP_ROOT}" "${SHARED_DIR}"
+install -d -m 0755 "${APP_ROOT}" "${SHARED_DIR}" "${SHARED_UPLOADS_DIR}" "${SHARED_UPLOADS_DIR}/attachments"
+
+for legacy_uploads_dir in "${REPO_ROOT}/uploads" "${SOURCE_DIR}/uploads"; do
+  if [[ -d "${legacy_uploads_dir}" ]]; then
+    rsync -a "${legacy_uploads_dir}/" "${SHARED_UPLOADS_DIR}/"
+  fi
+done
 
 if [[ "${REPO_ROOT}" != "${SOURCE_DIR}" ]]; then
   install -d -m 0755 "${SOURCE_DIR}"
@@ -33,6 +40,7 @@ if [[ "${REPO_ROOT}" != "${SOURCE_DIR}" ]]; then
     --exclude "frontend/dist" \
     --exclude "parent-portal/node_modules" \
     --exclude "parent-portal/dist" \
+    --exclude "uploads" \
     "${REPO_ROOT}/" "${SOURCE_DIR}/"
 fi
 

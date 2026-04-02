@@ -8,6 +8,32 @@ const http = axios.create({
   timeout: 10000
 })
 
+const extractErrorMessage = async error => {
+  const data = error?.response?.data
+
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text()
+      if (text) {
+        try {
+          const parsed = JSON.parse(text)
+          return parsed?.detail || parsed?.message || text
+        } catch {
+          return text
+        }
+      }
+    } catch {
+      return 'Request failed'
+    }
+  }
+
+  if (typeof data === 'string' && data.trim()) {
+    return data
+  }
+
+  return data?.detail || 'Request failed'
+}
+
 http.interceptors.request.use(
   config => {
     const token = localStorage.getItem('token')
@@ -21,9 +47,9 @@ http.interceptors.request.use(
 
 http.interceptors.response.use(
   response => response.data,
-  error => {
+  async error => {
     if (error.response) {
-      const message = error.response.data?.detail || 'Request failed'
+      const message = await extractErrorMessage(error)
       ElMessage.error(message)
       if (error.response.status === 401) {
         localStorage.removeItem('token')

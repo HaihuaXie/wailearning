@@ -32,7 +32,7 @@ def download_attachment(
 ):
     file_path = get_attachment_file_path(attachment_url)
     if not file_path or not file_path.exists():
-        raise HTTPException(status_code=404, detail="Attachment not found.")
+        raise HTTPException(status_code=404, detail="Attachment file not found on server.")
 
     return FileResponse(
         path=file_path,
