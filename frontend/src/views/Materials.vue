@@ -76,14 +76,14 @@
           </el-upload>
           <div class="attachment-help">{{ attachmentHintText }}</div>
           <div v-if="attachmentDisplayName" class="attachment-preview">
-            <el-link
+            <el-button
               v-if="form.attachment_url"
-              :href="form.attachment_url"
-              target="_blank"
               type="primary"
+              link
+              @click="downloadFormAttachment"
             >
               {{ attachmentDisplayName }}
-            </el-link>
+            </el-button>
             <span v-else>{{ attachmentDisplayName }}</span>
             <el-button link type="danger" @click="removeAttachment">移除</el-button>
           </div>
@@ -120,7 +120,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { attachmentHintText, validateAttachmentFile } from '@/utils/attachments'
+import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -246,11 +246,15 @@ const viewMaterial = async row => {
   detailVisible.value = true
 }
 
-const openAttachment = row => {
+const openAttachment = async row => {
   if (!row?.attachment_url) {
     return
   }
-  window.open(row.attachment_url, '_blank', 'noopener')
+  await downloadAttachment(row.attachment_url, row.attachment_name)
+}
+
+const downloadFormAttachment = async () => {
+  await downloadAttachment(form.attachment_url, attachmentDisplayName.value)
 }
 
 const canDeleteMaterial = row => userStore.isAdmin || row.created_by === userStore.userInfo?.id

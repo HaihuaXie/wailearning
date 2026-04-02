@@ -140,7 +140,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { attachmentHintText, validateAttachmentFile } from '@/utils/attachments'
+import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -279,11 +279,11 @@ const goToSubmissionStatus = row => {
   router.push(`/homework/${row.id}/submissions`)
 }
 
-const openAttachment = row => {
+const openAttachment = async row => {
   if (!row?.attachment_url) {
     return
   }
-  window.open(row.attachment_url, '_blank', 'noopener')
+  await downloadAttachment(row.attachment_url, row.attachment_name)
 }
 
 const deleteHomework = async row => {

@@ -1,6 +1,11 @@
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 
-from app.attachments import save_attachment
+from app.attachments import (
+    get_attachment_download_name,
+    get_attachment_file_path,
+    save_attachment,
+)
 from app.auth import get_current_active_user
 from app.models import User
 from app.schemas import AttachmentUploadResponse
@@ -17,3 +22,20 @@ async def upload_attachment(
 ):
     uploaded = await save_attachment(file, request)
     return AttachmentUploadResponse(**uploaded)
+
+
+@router.get("/download")
+def download_attachment(
+    attachment_url: str,
+    attachment_name: str | None = None,
+    _current_user: User = Depends(get_current_active_user),
+):
+    file_path = get_attachment_file_path(attachment_url)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+
+    return FileResponse(
+        path=file_path,
+        filename=get_attachment_download_name(attachment_url, attachment_name),
+        media_type="application/octet-stream",
+    )

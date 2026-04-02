@@ -1,3 +1,5 @@
+import { http } from '@/api'
+
 export const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024
 
 const BLOCKED_ATTACHMENT_EXTENSIONS = ['.apk', '.app', '.bat', '.cmd', '.com', '.exe', '.msi', '.ps1', '.scr']
@@ -21,4 +23,43 @@ export const validateAttachmentFile = file => {
   }
 
   return { valid: true }
+}
+
+const resolveAttachmentName = (attachmentUrl, attachmentName) => {
+  const normalizedName = (attachmentName || '').trim().split(/[\\/]/).pop()
+  if (normalizedName) {
+    return normalizedName
+  }
+
+  try {
+    const url = new URL(attachmentUrl, window.location.origin)
+    const pathname = url.pathname || ''
+    const storedName = pathname.split('/').filter(Boolean).pop()
+    return storedName ? decodeURIComponent(storedName) : 'attachment'
+  } catch {
+    return 'attachment'
+  }
+}
+
+export const downloadAttachment = async (attachmentUrl, attachmentName) => {
+  if (!attachmentUrl) {
+    return
+  }
+
+  const blob = await http.get('/files/download', {
+    params: {
+      attachment_url: attachmentUrl,
+      ...(attachmentName ? { attachment_name: attachmentName } : {})
+    },
+    responseType: 'blob'
+  })
+
+  const objectUrl = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = resolveAttachmentName(attachmentUrl, attachmentName)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000)
 }

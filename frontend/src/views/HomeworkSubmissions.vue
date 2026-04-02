@@ -31,7 +31,7 @@
           <el-descriptions-item label="发布时间">{{ formatDate(homework.created_at) }}</el-descriptions-item>
           <el-descriptions-item label="发布人">{{ homework.creator_name || '未设置' }}</el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
-            <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url)">
+            <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
               {{ homework.attachment_name || '下载附件' }}
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
@@ -78,7 +78,7 @@
                   v-if="row.attachment_url"
                   type="primary"
                   link
-                  @click="openAttachment(row.attachment_url)"
+                  @click="openAttachment(row.attachment_url, row.attachment_name)"
                 >
                   {{ row.attachment_name || '下载附件' }}
                 </el-button>
@@ -99,6 +99,7 @@ import { ElMessage } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
+import { downloadAttachment } from '@/utils/attachments'
 
 const route = useRoute()
 const router = useRouter()
@@ -160,11 +161,11 @@ const downloadSelected = async () => {
   }
 }
 
-const openAttachment = url => {
+const openAttachment = async (url, attachmentName) => {
   if (!url) {
     return
   }
-  window.open(url, '_blank', 'noopener')
+  await downloadAttachment(url, attachmentName)
 }
 
 const formatDate = value => {

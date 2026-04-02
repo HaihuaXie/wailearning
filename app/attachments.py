@@ -88,3 +88,15 @@ def get_attachment_file_path(attachment_url: Optional[str]) -> Optional[Path]:
 
     stored_name = Path(attachment_path[len(prefix):]).name
     return ATTACHMENTS_DIR / stored_name
+
+
+def get_attachment_download_name(attachment_url: Optional[str], attachment_name: Optional[str]) -> str:
+    normalized_name = Path((attachment_name or "").strip()).name
+    if normalized_name:
+        return normalized_name
+
+    target_path = get_attachment_file_path(attachment_url)
+    if target_path:
+        return target_path.name
+
+    return "attachment"

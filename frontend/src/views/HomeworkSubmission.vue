@@ -24,7 +24,7 @@
             {{ homework.content || '暂无作业说明。' }}
           </el-descriptions-item>
           <el-descriptions-item label="作业附件" :span="2">
-            <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url)">
+            <el-button v-if="homework.attachment_url" type="primary" link @click="openAttachment(homework.attachment_url, homework.attachment_name)">
               {{ homework.attachment_name || '下载附件' }}
             </el-button>
             <span v-else class="muted-text">暂无附件</span>
@@ -66,7 +66,7 @@
                 v-if="!attachmentFile && form.attachment_url"
                 type="primary"
                 link
-                @click="openAttachment(form.attachment_url)"
+                @click="openAttachment(form.attachment_url, attachmentDisplayName)"
               >
                 {{ attachmentDisplayName }}
               </el-button>
@@ -92,7 +92,7 @@ import { ElMessage } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { attachmentHintText, validateAttachmentFile } from '@/utils/attachments'
+import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
 const route = useRoute()
 const router = useRouter()
@@ -198,11 +198,11 @@ const submitForm = async () => {
   }
 }
 
-const openAttachment = url => {
+const openAttachment = async (url, attachmentName) => {
   if (!url) {
     return
   }
-  window.open(url, '_blank', 'noopener')
+  await downloadAttachment(url, attachmentName)
 }
 
 const formatDate = value => {
