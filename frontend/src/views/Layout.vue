@@ -255,8 +255,8 @@ const teacherMenu = [
 
 const studentMenu = [
   { path: '/materials', label: '课程资料', icon: Collection },
-  { path: '/homework', label: '作业', icon: Reading },
-  { path: '/notifications', label: '通知', icon: Bell }
+  { path: '/homework', label: '课程作业', icon: Reading },
+  { path: '/notifications', label: '课程通知', icon: Bell }
 ]
 
 const adminMenu = [
