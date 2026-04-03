@@ -39,12 +39,6 @@
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column prop="creator_name" label="发布人" width="120" />
-          <el-table-column prop="created_at" label="发布时间" width="180">
-            <template #default="{ row }">
-              {{ formatDate(row.created_at) }}
-            </template>
-          </el-table-column>
           <el-table-column label="操作" width="280">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
@@ -70,6 +64,12 @@
               >
                 删除
               </el-button>
+            </template>
+          </el-table-column>
+          <el-table-column prop="creator_name" label="发布人" width="120" />
+          <el-table-column prop="created_at" label="发布时间" width="180">
+            <template #default="{ row }">
+              {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
         </el-table>
