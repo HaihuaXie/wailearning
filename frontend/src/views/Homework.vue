@@ -19,9 +19,9 @@
     <template v-else>
       <el-card shadow="never">
         <el-table :data="homeworks" v-loading="loading">
-          <el-table-column prop="title" label="作业标题" min-width="200" />
+          <el-table-column prop="title" label="作业标题" width="190" show-overflow-tooltip />
           <el-table-column prop="subject_name" label="课程" width="160" />
-          <el-table-column label="附件" width="140">
+          <el-table-column label="附件" width="110">
             <template #default="{ row }">
               <el-button
                 v-if="row.attachment_url"
@@ -39,7 +39,7 @@
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="280">
+          <el-table-column label="操作" width="220">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
               <el-button
@@ -66,8 +66,8 @@
               </el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="creator_name" label="发布人" width="120" />
-          <el-table-column prop="created_at" label="发布时间" width="180">
+          <el-table-column prop="creator_name" label="发布人" width="100" />
+          <el-table-column prop="created_at" label="发布时间" width="165">
             <template #default="{ row }">
               {{ formatDate(row.created_at) }}
             </template>
