@@ -1,5 +1,6 @@
 import io
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 from urllib.parse import quote
@@ -132,6 +133,28 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
             raise HTTPException(status_code=403, detail="You are not enrolled in this course.")
 
     return student
+
+
+def _is_homework_submission_closed(homework: Homework) -> bool:
+    if not homework.due_date:
+        return False
+
+    current_time = datetime.now(homework.due_date.tzinfo) if homework.due_date.tzinfo else datetime.now()
+    return current_time > homework.due_date
+
+
+def _ensure_homework_submission_open(
+    homework: Homework,
+    payload: HomeworkSubmissionCreate,
+    submission: Optional[HomeworkSubmission] = None,
+) -> None:
+    if not _is_homework_submission_closed(homework):
+        return
+
+    if payload.attachment_url and (not submission or payload.attachment_url != submission.attachment_url):
+        delete_attachment_file(payload.attachment_url)
+
+    raise HTTPException(status_code=400, detail="已超过作业截止时间，不能再提交或修改。")
 
 
 def _serialize_homework(homework: Homework) -> HomeworkResponse:
@@ -331,6 +354,8 @@ def submit_homework(
         )
         .first()
     )
+
+    _ensure_homework_submission_open(homework, data, submission)
 
     if submission is None:
         submission = HomeworkSubmission(

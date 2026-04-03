@@ -47,6 +47,7 @@
               v-model="form.content"
               type="textarea"
               :rows="6"
+              :disabled="isSubmissionLocked"
               placeholder="可填写作业说明、答题思路或补充信息。"
             />
           </el-form-item>
@@ -56,11 +57,13 @@
               :auto-upload="false"
               :show-file-list="false"
               :limit="1"
+              :disabled="isSubmissionLocked"
               :on-change="handleAttachmentChange"
             >
-              <el-button>选择附件</el-button>
+              <el-button :disabled="isSubmissionLocked">选择附件</el-button>
             </el-upload>
             <div class="attachment-help">{{ attachmentHintText }}</div>
+            <div v-if="isSubmissionLocked" class="deadline-warning">已超过截止时间，不能再提交或修改作业。</div>
             <div v-if="attachmentDisplayName" class="attachment-preview">
               <el-button
                 v-if="!attachmentFile && form.attachment_url"
@@ -71,13 +74,13 @@
                 {{ attachmentDisplayName }}
               </el-button>
               <span v-else>{{ attachmentDisplayName }}</span>
-              <el-button link type="danger" @click="removeAttachment">移除</el-button>
+              <el-button link type="danger" :disabled="isSubmissionLocked" @click="removeAttachment">移除</el-button>
             </div>
           </el-form-item>
 
           <div class="form-actions">
             <el-button @click="router.push('/homework')">取消</el-button>
-            <el-button type="primary" :loading="submitting" @click="submitForm">保存提交</el-button>
+            <el-button type="primary" :loading="submitting" :disabled="isSubmissionLocked" @click="submitForm">保存提交</el-button>
           </div>
         </el-form>
       </el-card>
@@ -86,7 +89,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
@@ -103,9 +106,19 @@ const submitting = ref(false)
 const homework = ref(null)
 const attachmentFile = ref(null)
 const hasExistingSubmission = ref(false)
+const currentTime = ref(Date.now())
+let clockTimer = null
 
 const selectedCourse = computed(() => userStore.selectedCourse)
 const attachmentDisplayName = computed(() => attachmentFile.value?.name || form.attachment_name || '')
+const isSubmissionLocked = computed(() => {
+  if (!homework.value?.due_date) {
+    return false
+  }
+
+  const dueTime = new Date(homework.value.due_date).getTime()
+  return Number.isFinite(dueTime) && currentTime.value > dueTime
+})
 
 const form = reactive({
   content: '',
@@ -138,6 +151,10 @@ const loadPage = async () => {
 }
 
 const handleAttachmentChange = uploadFile => {
+  if (isSubmissionLocked.value) {
+    return false
+  }
+
   const file = uploadFile.raw
   const result = validateAttachmentFile(file)
   if (!result.valid) {
@@ -153,6 +170,10 @@ const handleAttachmentChange = uploadFile => {
 }
 
 const removeAttachment = () => {
+  if (isSubmissionLocked.value) {
+    return
+  }
+
   attachmentFile.value = null
   if (form.attachment_url) {
     form.remove_attachment = true
@@ -182,6 +203,11 @@ const uploadAttachmentIfNeeded = async () => {
 }
 
 const submitForm = async () => {
+  if (isSubmissionLocked.value) {
+    ElMessage.warning('已超过截止时间，不能再提交或修改作业。')
+    return
+  }
+
   submitting.value = true
   try {
     const attachment = await uploadAttachmentIfNeeded()
@@ -213,7 +239,18 @@ const formatDate = value => {
 }
 
 onMounted(() => {
+  currentTime.value = Date.now()
+  clockTimer = window.setInterval(() => {
+    currentTime.value = Date.now()
+  }, 30000)
   loadPage()
+})
+
+onBeforeUnmount(() => {
+  if (clockTimer) {
+    window.clearInterval(clockTimer)
+    clockTimer = null
+  }
 })
 
 watch(
@@ -267,6 +304,12 @@ watch(
 
 .attachment-help {
   margin-top: 8px;
+}
+
+.deadline-warning {
+  margin-top: 8px;
+  color: #dc2626;
+  font-size: 13px;
 }
 
 .attachment-preview {
