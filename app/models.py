@@ -346,6 +346,8 @@ class HomeworkSubmission(Base):
     content = Column(String, nullable=True)
     attachment_name = Column(String, nullable=True)
     attachment_url = Column(String, nullable=True)
+    review_score = Column(Float, nullable=True)
+    review_comment = Column(String, nullable=True)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

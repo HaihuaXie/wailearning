@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class UserRole(str, Enum):
@@ -643,6 +643,8 @@ class HomeworkResponse(HomeworkBase):
     class_name: Optional[str] = None
     subject_name: Optional[str] = None
     creator_name: Optional[str] = None
+    review_score: Optional[float] = None
+    review_comment: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -682,9 +684,22 @@ class HomeworkSubmissionResponse(BaseModel):
     updated_at: datetime
     student_name: Optional[str] = None
     student_no: Optional[str] = None
+    review_score: Optional[float] = None
+    review_comment: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class HomeworkSubmissionReviewUpdate(BaseModel):
+    review_score: float = Field(..., ge=0, le=100)
+    review_comment: Optional[str] = None
+
+    @model_validator(mode="after")
+    def normalize_review_payload(self):
+        if isinstance(self.review_comment, str):
+            self.review_comment = self.review_comment.strip() or None
+        return self
 
 
 class HomeworkSubmissionStatusResponse(BaseModel):
@@ -698,6 +713,8 @@ class HomeworkSubmissionStatusResponse(BaseModel):
     content: Optional[str] = None
     attachment_name: Optional[str] = None
     attachment_url: Optional[str] = None
+    review_score: Optional[float] = None
+    review_comment: Optional[str] = None
 
 
 class HomeworkSubmissionStatusListResponse(BaseModel):

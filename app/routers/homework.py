@@ -22,6 +22,7 @@ from app.schemas import (
     HomeworkResponse,
     HomeworkSubmissionCreate,
     HomeworkSubmissionDownloadRequest,
+    HomeworkSubmissionReviewUpdate,
     HomeworkSubmissionResponse,
     HomeworkSubmissionStatusListResponse,
     HomeworkSubmissionStatusResponse,
@@ -59,6 +60,24 @@ def _ensure_homework_access(homework: Homework, current_user: User, db: Session)
     return homework
 
 
+def _match_student_for_user(student_query, current_user: User, *, raise_on_multiple: bool = False) -> Optional[Student]:
+    student = None
+    if current_user.username:
+        student = student_query.filter(Student.student_no == current_user.username).first()
+
+    if not student and current_user.real_name:
+        matches = student_query.filter(Student.name == current_user.real_name).all()
+        if len(matches) == 1:
+            student = matches[0]
+        elif len(matches) > 1 and raise_on_multiple:
+            raise HTTPException(
+                status_code=400,
+                detail="Multiple student records match the current account. Please contact an administrator.",
+            )
+
+    return student
+
+
 def _serialize_submission(submission: HomeworkSubmission) -> HomeworkSubmissionResponse:
     return HomeworkSubmissionResponse(
         id=submission.id,
@@ -73,6 +92,8 @@ def _serialize_submission(submission: HomeworkSubmission) -> HomeworkSubmissionR
         updated_at=submission.updated_at,
         student_name=submission.student.name if submission.student else None,
         student_no=submission.student.student_no if submission.student else None,
+        review_score=submission.review_score,
+        review_comment=submission.review_comment,
     )
 
 
@@ -94,6 +115,8 @@ def _serialize_submission_status(
         content=submission.content if submission else None,
         attachment_name=submission.attachment_name if submission else None,
         attachment_url=submission.attachment_url if submission else None,
+        review_score=submission.review_score if submission else None,
+        review_comment=submission.review_comment if submission else None,
     )
 
 
@@ -102,20 +125,7 @@ def _resolve_student_for_user(homework: Homework, current_user: User, db: Sessio
         raise HTTPException(status_code=403, detail="Only students can submit homework.")
 
     student_query = db.query(Student).filter(Student.class_id == homework.class_id)
-
-    student = None
-    if current_user.username:
-        student = student_query.filter(Student.student_no == current_user.username).first()
-
-    if not student and current_user.real_name:
-        matches = student_query.filter(Student.name == current_user.real_name).all()
-        if len(matches) == 1:
-            student = matches[0]
-        elif len(matches) > 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Multiple student records match the current account. Please contact an administrator.",
-            )
+    student = _match_student_for_user(student_query, current_user, raise_on_multiple=True)
 
     if not student:
         raise HTTPException(status_code=404, detail="Student profile not found for the current account.")
@@ -157,7 +167,7 @@ def _ensure_homework_submission_open(
     raise HTTPException(status_code=400, detail="已超过作业截止时间，不能再提交或修改。")
 
 
-def _serialize_homework(homework: Homework) -> HomeworkResponse:
+def _serialize_homework(homework: Homework, submission: Optional[HomeworkSubmission] = None) -> HomeworkResponse:
     return HomeworkResponse(
         id=homework.id,
         title=homework.title,
@@ -173,6 +183,8 @@ def _serialize_homework(homework: Homework) -> HomeworkResponse:
         class_name=homework.class_obj.name if homework.class_obj else None,
         subject_name=homework.subject.name if homework.subject else None,
         creator_name=homework.creator.real_name if homework.creator else None,
+        review_score=submission.review_score if submission else None,
+        review_comment=submission.review_comment if submission else None,
     )
 
 
@@ -204,7 +216,29 @@ def get_homeworks(
 
     total = query.count()
     homeworks = query.order_by(desc(Homework.created_at)).offset((page - 1) * page_size).limit(page_size).all()
-    return HomeworkListResponse(total=total, data=[_serialize_homework(homework) for homework in homeworks])
+
+    submission_map: dict[int, HomeworkSubmission] = {}
+    if current_user.role == UserRole.STUDENT and homeworks:
+        class_ids = {homework.class_id for homework in homeworks}
+        student = _match_student_for_user(
+            db.query(Student).filter(Student.class_id.in_(class_ids)),
+            current_user,
+        )
+        if student:
+            submission_rows = (
+                db.query(HomeworkSubmission)
+                .filter(
+                    HomeworkSubmission.homework_id.in_([homework.id for homework in homeworks]),
+                    HomeworkSubmission.student_id == student.id,
+                )
+                .all()
+            )
+            submission_map = {submission.homework_id: submission for submission in submission_rows}
+
+    return HomeworkListResponse(
+        total=total,
+        data=[_serialize_homework(homework, submission_map.get(homework.id)) for homework in homeworks],
+    )
 
 
 @router.get("/{homework_id}", response_model=HomeworkResponse)
@@ -214,7 +248,22 @@ def get_homework(
     current_user: User = Depends(get_current_active_user),
 ):
     homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
-    return _serialize_homework(homework)
+    submission = None
+    if current_user.role == UserRole.STUDENT:
+        student = _match_student_for_user(
+            db.query(Student).filter(Student.class_id == homework.class_id),
+            current_user,
+        )
+        if student:
+            submission = (
+                db.query(HomeworkSubmission)
+                .filter(
+                    HomeworkSubmission.homework_id == homework.id,
+                    HomeworkSubmission.student_id == student.id,
+                )
+                .first()
+            )
+    return _serialize_homework(homework, submission)
 
 
 @router.post("", response_model=HomeworkResponse)
@@ -422,6 +471,37 @@ def get_homework_submissions(
             rows.append(_serialize_submission_status(None, submission_map.get(student.id), student))
 
     return HomeworkSubmissionStatusListResponse(total=len(rows), data=rows)
+
+
+@router.put("/{homework_id}/submissions/{submission_id}/review", response_model=HomeworkSubmissionResponse)
+def review_homework_submission(
+    homework_id: int,
+    submission_id: int,
+    payload: HomeworkSubmissionReviewUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can review homework submissions.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    submission = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.id == submission_id,
+            HomeworkSubmission.homework_id == homework.id,
+        )
+        .first()
+    )
+    if not submission:
+        raise HTTPException(status_code=404, detail="Homework submission not found.")
+
+    submission.review_score = payload.review_score
+    submission.review_comment = payload.review_comment
+
+    db.commit()
+    db.refresh(submission)
+    return _serialize_submission(submission)
 
 
 @router.post("/{homework_id}/submissions/download")

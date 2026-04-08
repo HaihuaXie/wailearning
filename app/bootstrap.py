@@ -68,6 +68,8 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id)",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE homeworks ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_score FLOAT",
+        "ALTER TABLE homework_submissions ADD COLUMN IF NOT EXISTS review_comment VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_name VARCHAR",
         "ALTER TABLE notifications ADD COLUMN IF NOT EXISTS attachment_url VARCHAR",
     ]
