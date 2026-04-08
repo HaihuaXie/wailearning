@@ -85,6 +85,35 @@
                 <span v-else class="muted-text">无附件</span>
               </template>
             </el-table-column>
+            <el-table-column label="评分" min-width="320">
+              <template #default="{ row }">
+                <div v-if="row.submission_id" class="review-cell">
+                  <el-input
+                    v-model="row.review_score_input"
+                    placeholder="分数 0-100"
+                    class="review-score-input"
+                  />
+                  <el-input
+                    v-model="row.review_comment_input"
+                    placeholder="评论"
+                    class="review-comment-input"
+                  />
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :loading="row.saving_review"
+                    @click="saveReview(row)"
+                  >
+                    确定
+                  </el-button>
+                </div>
+                <div v-if="hasSavedReview(row)" class="review-result">
+                  <span v-if="row.review_score !== null && row.review_score !== undefined">当前分数：{{ formatScore(row.review_score) }}</span>
+                  <span v-if="row.review_comment">评论：{{ row.review_comment }}</span>
+                </div>
+                <span v-else-if="!row.submission_id" class="muted-text">未提交</span>
+              </template>
+            </el-table-column>
           </el-table>
         </div>
       </el-card>
@@ -116,6 +145,14 @@ const downloadableSelection = computed(() =>
   selectedRows.value.filter(row => row.submission_id && row.attachment_url)
 )
 
+const buildSubmissionRow = row => ({
+  ...row,
+  review_score_input:
+    row.review_score === null || row.review_score === undefined ? '' : String(row.review_score),
+  review_comment_input: row.review_comment || '',
+  saving_review: false
+})
+
 const loadPage = async () => {
   loading.value = true
   try {
@@ -124,7 +161,7 @@ const loadPage = async () => {
       api.homework.getSubmissions(route.params.id)
     ])
     homework.value = homeworkDetail
-    submissions.value = submissionResult?.data || []
+    submissions.value = (submissionResult?.data || []).map(buildSubmissionRow)
     selectedRows.value = []
   } finally {
     loading.value = false
@@ -136,6 +173,17 @@ const handleSelectionChange = rows => {
 }
 
 const selectableRow = row => Boolean(row.submission_id && row.attachment_url)
+
+const hasSavedReview = row =>
+  row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
+
+const formatScore = value => {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '--'
+  }
+  return Number.isInteger(numericValue) ? `${numericValue}` : numericValue.toFixed(1)
+}
 
 const getTodayZipName = () => `${new Date().toLocaleDateString('sv-SE')}.zip`
 
@@ -179,6 +227,32 @@ const downloadSelected = async () => {
     ElMessage.success('已开始下载')
   } finally {
     downloading.value = false
+  }
+}
+
+const saveReview = async row => {
+  if (!row.submission_id) {
+    ElMessage.error('未提交的作业不能评分')
+    return
+  }
+
+  const rawScore = `${row.review_score_input ?? ''}`.trim()
+  const score = Number(rawScore)
+  if (!rawScore || !Number.isFinite(score) || score < 0 || score > 100) {
+    ElMessage.error('请输入 0 到 100 之间的数字分数')
+    return
+  }
+
+  row.saving_review = true
+  try {
+    await api.homework.reviewSubmission(route.params.id, row.submission_id, {
+      review_score: score,
+      review_comment: row.review_comment_input?.trim() || null
+    })
+    ElMessage.success('评分已保存')
+    await loadPage()
+  } finally {
+    row.saving_review = false
   }
 }
 
@@ -257,6 +331,30 @@ watch(
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
+}
+
+.review-cell {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.review-score-input {
+  width: 96px;
+}
+
+.review-comment-input {
+  min-width: 140px;
+}
+
+.review-result {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #475569;
+  font-size: 13px;
 }
 
 :deep(.table-wrapper .el-table) {

@@ -40,6 +40,21 @@
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
+          <el-table-column v-if="userStore.isStudent" label="分数" min-width="220">
+            <template #default="{ row }">
+              <div v-if="hasHomeworkReview(row)" class="review-summary">
+                <el-tag
+                  v-if="row.review_score !== null && row.review_score !== undefined"
+                  :type="scoreTag(row.review_score)"
+                  size="small"
+                >
+                  {{ formatScore(row.review_score) }}
+                </el-tag>
+                <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
+              </div>
+              <span v-else class="muted-text">未评分</span>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="220">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
@@ -287,6 +302,24 @@ const openAttachment = async row => {
   await downloadAttachment(row.attachment_url, row.attachment_name)
 }
 
+const hasHomeworkReview = row =>
+  row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
+
+const formatScore = value => {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return '--'
+  }
+  return Number.isInteger(numericValue) ? `${numericValue}` : numericValue.toFixed(1)
+}
+
+const scoreTag = score => {
+  const numericScore = Number(score)
+  if (numericScore >= 90) return 'success'
+  if (numericScore >= 60) return 'warning'
+  return 'danger'
+}
+
 const deleteHomework = async row => {
   try {
     await ElMessageBox.confirm(`确认删除作业“${row.title}”吗？`, '删除作业', { type: 'warning' })
@@ -359,6 +392,19 @@ watch(selectedCourse, () => {
   gap: 12px;
   margin-top: 10px;
   flex-wrap: wrap;
+}
+
+.review-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.review-comment {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 768px) {

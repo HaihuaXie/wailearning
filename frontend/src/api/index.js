@@ -170,6 +170,8 @@ const api = {
     getMySubmission: id => http.get(`/homeworks/${id}/submission/me`),
     submit: (id, data) => http.post(`/homeworks/${id}/submission`, data),
     getSubmissions: id => http.get(`/homeworks/${id}/submissions`),
+    reviewSubmission: (homeworkId, submissionId, data) =>
+      http.put(`/homeworks/${homeworkId}/submissions/${submissionId}/review`, data),
     downloadSubmissions: (id, data) =>
       http.post(`/homeworks/${id}/submissions/download`, data, {
         responseType: 'blob',
