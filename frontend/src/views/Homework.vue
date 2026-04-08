@@ -40,21 +40,6 @@
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column v-if="userStore.isStudent" label="分数" min-width="220">
-            <template #default="{ row }">
-              <div v-if="hasHomeworkReview(row)" class="review-summary">
-                <el-tag
-                  v-if="row.review_score !== null && row.review_score !== undefined"
-                  :type="scoreTag(row.review_score)"
-                  size="small"
-                >
-                  {{ formatScore(row.review_score) }}
-                </el-tag>
-                <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
-              </div>
-              <span v-else class="muted-text">未评分</span>
-            </template>
-          </el-table-column>
           <el-table-column label="操作" width="220">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
@@ -82,8 +67,23 @@
               </el-button>
             </template>
           </el-table-column>
-          <el-table-column prop="creator_name" label="发布人" width="100" />
-          <el-table-column prop="created_at" label="发布时间" width="165">
+          <el-table-column v-if="userStore.isStudent" label="分数" min-width="220">
+            <template #default="{ row }">
+              <div v-if="hasHomeworkReview(row)" class="review-summary">
+                <el-tag
+                  v-if="row.review_score !== null && row.review_score !== undefined"
+                  :type="scoreTag(row.review_score)"
+                  size="small"
+                >
+                  {{ formatScore(row.review_score) }}
+                </el-tag>
+                <div v-if="row.review_comment" class="review-comment">{{ row.review_comment }}</div>
+              </div>
+              <span v-else class="muted-text">未评分</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="!userStore.isStudent" prop="creator_name" label="发布人" width="100" />
+          <el-table-column v-if="!userStore.isStudent" prop="created_at" label="发布时间" width="165">
             <template #default="{ row }">
               {{ formatDate(row.created_at) }}
             </template>
