@@ -251,9 +251,6 @@ const teacherMenu = [
   { path: '/students', label: '学生管理', icon: User },
   { path: '/scores', label: '成绩管理', icon: Collection },
   { path: '/attendance', label: '考勤管理', icon: Calendar },
-  { path: '/rankings', label: '班级排名', icon: TrendCharts },
-  { path: '/analysis', label: '数据分析', icon: DataAnalysis },
-  { path: '/points', label: '积分系统', icon: Coin },
   { path: '/materials', label: '课程资料', icon: Collection },
   { path: '/homework', label: '作业管理', icon: Reading },
   { path: '/notifications', label: '通知中心', icon: Bell }
