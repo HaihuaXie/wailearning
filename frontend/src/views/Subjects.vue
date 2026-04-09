@@ -216,6 +216,42 @@ const openCreateDialog = () => {
   dialogVisible.value = true
 }
 
+const normalizeDateField = value => {
+  if (!value) {
+    return ''
+  }
+
+  const rawValue = `${value}`.trim()
+  const matchedDate = rawValue.match(/^(\d{4}-\d{2}-\d{2})/)
+
+  if (matchedDate) {
+    return matchedDate[1]
+  }
+
+  const parsedDate = new Date(rawValue)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return rawValue
+  }
+
+  const year = parsedDate.getFullYear()
+  const month = `${parsedDate.getMonth() + 1}`.padStart(2, '0')
+  const day = `${parsedDate.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const serializeDateField = (value, boundary) => {
+  const normalizedDate = normalizeDateField(value)
+
+  if (!normalizedDate) {
+    return ''
+  }
+
+  return boundary === 'end'
+    ? `${normalizedDate}T23:59:59`
+    : `${normalizedDate}T00:00:00`
+}
+
 const openEditDialog = course => {
   editingCourse.value = course
   Object.assign(form, {
@@ -226,8 +262,8 @@ const openEditDialog = course => {
     status: course.status || 'active',
     semester: course.semester || '',
     weekly_schedule: course.weekly_schedule || '',
-    course_start_at: course.course_start_at || '',
-    course_end_at: course.course_end_at || '',
+    course_start_at: normalizeDateField(course.course_start_at),
+    course_end_at: normalizeDateField(course.course_end_at),
     description: course.description || ''
   })
   dialogVisible.value = true
@@ -258,11 +294,17 @@ const submitForm = async () => {
   await formRef.value.validate()
   submitting.value = true
   try {
+    const payload = {
+      ...form,
+      course_start_at: serializeDateField(form.course_start_at, 'start'),
+      course_end_at: serializeDateField(form.course_end_at, 'end')
+    }
+
     if (editingCourse.value) {
-      await api.courses.update(editingCourse.value.id, { ...form })
+      await api.courses.update(editingCourse.value.id, payload)
       ElMessage.success('课程已更新')
     } else {
-      await api.courses.create({ ...form })
+      await api.courses.create(payload)
       ElMessage.success('课程已创建')
     }
     dialogVisible.value = false
