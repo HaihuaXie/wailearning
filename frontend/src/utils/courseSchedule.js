@@ -9,20 +9,20 @@ export const WEEK_DAYS = [
 ]
 
 export const PERIOD_OPTIONS = [
-  { value: 1, label: '第1小节', time: '08:00-08:45', block: '第一大节(1-2节)' },
-  { value: 2, label: '第2小节', time: '08:45-09:30', block: '第一大节(1-2节)' },
-  { value: 3, label: '第3小节', time: '10:00-10:45', block: '第二大节(3-4节)' },
-  { value: 4, label: '第4小节', time: '10:45-11:30', block: '第二大节(3-4节)' },
-  { value: 5, label: '第5小节', time: '12:00-12:45', block: '第三大节(5-6节)' },
-  { value: 6, label: '第6小节', time: '12:45-13:30', block: '第三大节(5-6节)' },
-  { value: 7, label: '第7小节', time: '14:00-14:45', block: '第四大节(7-8节)' },
-  { value: 8, label: '第8小节', time: '14:45-15:30', block: '第四大节(7-8节)' },
-  { value: 9, label: '第9小节', time: '16:00-16:45', block: '第五大节(9-10节)' },
-  { value: 10, label: '第10小节', time: '16:45-17:30', block: '第五大节(9-10节)' },
-  { value: 11, label: '第11小节', time: '18:00-18:45', block: '第六大节(11-12节)' },
-  { value: 12, label: '第12小节', time: '18:45-19:30', block: '第六大节(11-12节)' },
-  { value: 13, label: '第13小节', time: '19:40-20:25', block: '第七大节(13-14节)' },
-  { value: 14, label: '第14小节', time: '20:25-21:10', block: '第七大节(13-14节)' }
+  { value: 1, label: '第1小节', time: '08:00-08:45' },
+  { value: 2, label: '第2小节', time: '08:45-09:30' },
+  { value: 3, label: '第3小节', time: '10:00-10:45' },
+  { value: 4, label: '第4小节', time: '10:45-11:30' },
+  { value: 5, label: '第5小节', time: '12:00-12:45' },
+  { value: 6, label: '第6小节', time: '12:45-13:30' },
+  { value: 7, label: '第7小节', time: '14:00-14:45' },
+  { value: 8, label: '第8小节', time: '14:45-15:30' },
+  { value: 9, label: '第9小节', time: '16:00-16:45' },
+  { value: 10, label: '第10小节', time: '16:45-17:30' },
+  { value: 11, label: '第11小节', time: '18:00-18:45' },
+  { value: 12, label: '第12小节', time: '18:45-19:30' },
+  { value: 13, label: '第13小节', time: '19:40-20:25' },
+  { value: 14, label: '第14小节', time: '20:25-21:10' }
 ]
 
 const DAY_MAP = Object.fromEntries(WEEK_DAYS.map(item => [item.value, item]))

@@ -35,7 +35,7 @@
             {{ formatScheduleDisplay(row.weekly_schedule) || '未设置' }}
           </template>
         </el-table-column>
-        <el-table-column label="课程起止" min-width="240">
+        <el-table-column label="课程起止" min-width="220">
           <template #default="{ row }">
             {{ formatDateRange(row.course_start_at, row.course_end_at) }}
           </template>
@@ -88,26 +88,26 @@
             <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.name" />
           </el-select>
         </el-form-item>
-        <el-form-item label="每周时间" prop="weekly_schedule">
-          <CourseSchedulePicker v-model="form.weekly_schedule" />
-        </el-form-item>
-        <el-form-item label="开始时间" prop="course_start_at">
+        <el-form-item label="起始日期" prop="course_start_at">
           <el-date-picker
             v-model="form.course_start_at"
-            type="datetime"
-            placeholder="选择开始时间"
+            type="date"
+            placeholder="请选择起始日期"
             style="width: 100%"
-            value-format="YYYY-MM-DDTHH:mm:ss"
+            value-format="YYYY-MM-DD"
           />
         </el-form-item>
-        <el-form-item label="结束时间" prop="course_end_at">
+        <el-form-item label="结束日期" prop="course_end_at">
           <el-date-picker
             v-model="form.course_end_at"
-            type="datetime"
-            placeholder="选择结束时间"
+            type="date"
+            placeholder="请选择结束日期"
             style="width: 100%"
-            value-format="YYYY-MM-DDTHH:mm:ss"
+            value-format="YYYY-MM-DD"
           />
+        </el-form-item>
+        <el-form-item label="每周时间" prop="weekly_schedule">
+          <CourseSchedulePicker v-model="form.weekly_schedule" />
         </el-form-item>
         <el-form-item label="课程简介" prop="description">
           <el-input v-model="form.description" type="textarea" :rows="4" />
@@ -171,8 +171,8 @@ const rules = {
       trigger: 'change'
     }
   ],
-  course_start_at: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
-  course_end_at: [{ required: true, message: '请选择结束时间', trigger: 'change' }]
+  course_start_at: [{ required: true, message: '请选择起始日期', trigger: 'change' }],
+  course_end_at: [{ required: true, message: '请选择结束日期', trigger: 'change' }]
 }
 
 const resetForm = () => {
@@ -238,12 +238,16 @@ const formatDate = dateStr => {
     return '未设置'
   }
 
-  return new Date(dateStr).toLocaleString('zh-CN', {
+  const date = new Date(dateStr)
+
+  if (Number.isNaN(date.getTime())) {
+    return dateStr
+  }
+
+  return date.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    day: '2-digit'
   })
 }
 

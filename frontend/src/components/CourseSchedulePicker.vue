@@ -35,7 +35,6 @@
         <div class="schedule-picker__period">
           <strong>{{ period.label }}</strong>
           <span>{{ period.time }}</span>
-          <small>{{ period.block }}</small>
         </div>
         <button
           v-for="day in WEEK_DAYS"
@@ -149,7 +148,7 @@ const toggleSlot = (dayValue, periodValue) => {
 
 .schedule-picker__grid {
   display: grid;
-  grid-template-columns: minmax(148px, 180px) repeat(7, minmax(72px, 1fr));
+  grid-template-columns: minmax(210px, 240px) repeat(7, minmax(72px, 1fr));
   border: 1px solid #dbe4f0;
   border-radius: 16px;
   overflow: hidden;
@@ -171,10 +170,10 @@ const toggleSlot = (dayValue, periodValue) => {
 
 .schedule-picker__period {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 12px 10px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  white-space: nowrap;
   background: #f8fafc;
   border-top: 1px solid #dbe4f0;
 }
@@ -184,13 +183,12 @@ const toggleSlot = (dayValue, periodValue) => {
   color: #0f172a;
 }
 
-.schedule-picker__period span,
-.schedule-picker__period small {
+.schedule-picker__period span {
   color: #64748b;
 }
 
 .schedule-picker__cell {
-  min-height: 78px;
+  min-height: 64px;
   border: 0;
   border-left: 1px solid #dbe4f0;
   border-top: 1px solid #dbe4f0;
@@ -213,12 +211,12 @@ const toggleSlot = (dayValue, periodValue) => {
 
 @media (max-width: 900px) {
   .schedule-picker__grid {
-    grid-template-columns: minmax(132px, 160px) repeat(7, minmax(60px, 1fr));
+    grid-template-columns: minmax(180px, 220px) repeat(7, minmax(60px, 1fr));
     font-size: 12px;
   }
 
   .schedule-picker__cell {
-    min-height: 64px;
+    min-height: 58px;
   }
 }
 
