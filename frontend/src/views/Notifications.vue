@@ -8,7 +8,6 @@
         </p>
       </div>
       <div class="header-actions">
-        <el-button v-if="userStore.isStudent" @click="router.push('/courses')">切换课程</el-button>
         <el-badge :value="unreadCount" :hidden="unreadCount === 0">
           <el-button @click="markAllRead" :disabled="unreadCount === 0">全部标为已读</el-button>
         </el-badge>
@@ -158,14 +157,12 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
 import { attachmentHintText, downloadAttachment, validateAttachmentFile } from '@/utils/attachments'
 
-const router = useRouter()
 const userStore = useUserStore()
 
 const loading = ref(false)

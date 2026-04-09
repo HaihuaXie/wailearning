@@ -38,7 +38,6 @@
               :key="course.id"
               class="course-card"
               :class="{ 'course-card-selected': userStore.selectedCourse?.id === course.id }"
-              @click="selectCourse(course)"
             >
               <div class="course-card-header">
                 <h3>{{ course.name }}</h3>
@@ -57,7 +56,12 @@
               </div>
               <p class="course-description">{{ course.description || '暂无课程简介。' }}</p>
               <div class="course-actions">
-                <el-button type="primary" @click.stop="selectCourse(course)">
+                <el-button
+                  :type="isCurrentCourse(course) ? 'info' : 'primary'"
+                  :plain="isCurrentCourse(course)"
+                  :disabled="isCurrentCourse(course)"
+                  @click.stop="selectCourse(course)"
+                >
                   进入课程
                 </el-button>
               </div>
@@ -79,7 +83,6 @@
               :key="course.id"
               class="course-card course-card-muted"
               :class="{ 'course-card-selected': userStore.selectedCourse?.id === course.id }"
-              @click="selectCourse(course)"
             >
               <div class="course-card-header">
                 <h3>{{ course.name }}</h3>
@@ -96,7 +99,12 @@
                 <span>起止时间：{{ formatDateRange(course.course_start_at, course.course_end_at) }}</span>
               </div>
               <div class="course-actions">
-                <el-button @click.stop="selectCourse(course)">
+                <el-button
+                  :type="isCurrentCourse(course) ? 'info' : 'default'"
+                  :plain="isCurrentCourse(course)"
+                  :disabled="isCurrentCourse(course)"
+                  @click.stop="selectCourse(course)"
+                >
                   查看课程
                 </el-button>
               </div>
@@ -277,7 +285,13 @@ const openCreateDialog = () => {
   dialogVisible.value = true
 }
 
+const isCurrentCourse = course => String(userStore.selectedCourse?.id || '') === String(course?.id || '')
+
 const selectCourse = course => {
+  if (isCurrentCourse(course)) {
+    return
+  }
+
   userStore.setSelectedCourse(course)
   if (userStore.isStudent) {
     router.push('/course-home')

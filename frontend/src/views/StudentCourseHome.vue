@@ -7,9 +7,6 @@
           {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分配班级'}` : '请先从课程列表中选择一门课程。' }}
         </p>
       </div>
-      <div class="header-actions">
-        <el-button @click="router.push('/courses')">切换课程</el-button>
-      </div>
     </div>
 
     <el-empty v-if="!selectedCourse" description="请先选择一门课程。" />

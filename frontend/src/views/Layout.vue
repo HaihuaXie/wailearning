@@ -53,10 +53,7 @@
         </div>
 
         <div class="header-right">
-          <el-button v-if="showStudentCourseLink" text @click="router.push('/courses')">
-            切换课程
-          </el-button>
-          <el-dropdown v-else-if="showCourseSwitcher" trigger="click" @command="handleCourseSwitch">
+          <el-dropdown v-if="showCourseSwitcher" trigger="hover" @command="handleCourseSwitch">
             <el-button text>
               切换课程
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
@@ -209,8 +206,7 @@ const homePath = computed(() => {
   return userStore.isStudent ? '/courses' : '/dashboard'
 })
 const showCourseContext = computed(() => !userStore.isAdmin && !!selectedCourse.value)
-const showStudentCourseLink = computed(() => userStore.isStudent && availableCourses.value.length > 0)
-const showCourseSwitcher = computed(() => !userStore.isAdmin && !userStore.isStudent && availableCourses.value.length > 0)
+const showCourseSwitcher = computed(() => !userStore.isAdmin && availableCourses.value.length > 0)
 
 const currentRouteName = computed(() => {
   if (route.meta?.title) {
@@ -274,7 +270,7 @@ const adminMenu = [
 
 const menuItems = computed(() => {
   if (userStore.isStudent) {
-    return [...studentBaseMenu, ...studentMenu]
+    return selectedCourse.value ? [...studentBaseMenu, ...studentMenu] : [studentBaseMenu[0]]
   }
   if (userStore.isAdmin) {
     return adminMenu
