@@ -1,3 +1,4 @@
+import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,7 @@ from app.course_access import (
 from app.database import get_db
 from app.models import Class, CourseEnrollment, Semester, Student, Subject, User, UserRole
 from app.schemas import (
+    CourseTimeItem,
     CourseEnrollmentResponse,
     CourseEnrollmentTypeUpdate,
     CourseRosterStudentInput,
@@ -24,6 +26,89 @@ from app.schemas import (
 
 
 router = APIRouter(prefix="/api/subjects", tags=["课程管理"])
+
+
+def _sort_course_times(course_times: List[CourseTimeItem]) -> List[CourseTimeItem]:
+    return sorted(
+        course_times,
+        key=lambda item: (item.course_start_at, item.course_end_at, item.weekly_schedule or ""),
+    )
+
+
+def _build_legacy_course_times(
+    weekly_schedule: Optional[str],
+    course_start_at,
+    course_end_at,
+) -> List[CourseTimeItem]:
+    if not weekly_schedule or not course_start_at or not course_end_at:
+        return []
+
+    return [
+        CourseTimeItem(
+            weekly_schedule=weekly_schedule,
+            course_start_at=course_start_at,
+            course_end_at=course_end_at,
+        )
+    ]
+
+
+def _resolve_course_times(
+    course_times: Optional[List[CourseTimeItem]],
+    weekly_schedule: Optional[str],
+    course_start_at,
+    course_end_at,
+) -> List[CourseTimeItem]:
+    normalized = [CourseTimeItem.model_validate(item) for item in (course_times or [])]
+
+    if not normalized:
+        normalized = _build_legacy_course_times(
+            weekly_schedule=weekly_schedule,
+            course_start_at=course_start_at,
+            course_end_at=course_end_at,
+        )
+
+    return _sort_course_times(normalized)
+
+
+def _deserialize_course_times(course: Subject) -> List[CourseTimeItem]:
+    if course.course_times:
+        try:
+            raw_items = json.loads(course.course_times)
+            normalized_items = []
+
+            for raw_item in raw_items or []:
+                try:
+                    normalized_items.append(CourseTimeItem.model_validate(raw_item))
+                except Exception:
+                    continue
+
+            if normalized_items:
+                return _sort_course_times(normalized_items)
+        except Exception:
+            pass
+
+    return _build_legacy_course_times(
+        weekly_schedule=course.weekly_schedule,
+        course_start_at=course.course_start_at,
+        course_end_at=course.course_end_at,
+    )
+
+
+def _serialize_course_times_for_storage(course_times: List[CourseTimeItem]) -> Optional[str]:
+    if not course_times:
+        return None
+
+    return json.dumps(
+        [
+            {
+                "weekly_schedule": item.weekly_schedule,
+                "course_start_at": item.course_start_at.isoformat(),
+                "course_end_at": item.course_end_at.isoformat(),
+            }
+            for item in course_times
+        ],
+        ensure_ascii=False,
+    )
 
 
 def _normalize_semester_label(semester: Optional[str], db: Session) -> Optional[str]:
@@ -93,6 +178,8 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
         if course.semester_obj
         else _normalize_semester_label(course.semester, db)
     )
+    course_times = _deserialize_course_times(course)
+    primary_course_time = course_times[0] if course_times else None
     return SubjectResponse(
         id=course.id,
         name=course.name,
@@ -102,9 +189,10 @@ def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
         course_type=course.course_type or "required",
         status=course.status or "active",
         semester=semester_label,
-        weekly_schedule=course.weekly_schedule,
-        course_start_at=course.course_start_at,
-        course_end_at=course.course_end_at,
+        weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else course.weekly_schedule,
+        course_start_at=primary_course_time.course_start_at if primary_course_time else course.course_start_at,
+        course_end_at=primary_course_time.course_end_at if primary_course_time else course.course_end_at,
+        course_times=course_times,
         description=course.description,
         teacher_name=course.teacher.real_name if course.teacher else None,
         class_name=course.class_obj.name if course.class_obj else None,
@@ -246,6 +334,13 @@ def create_subject(
         semester_name=subject_data.semester,
     )
     semester_label = semester_obj.name if semester_obj else None
+    course_times = _resolve_course_times(
+        subject_data.course_times,
+        subject_data.weekly_schedule,
+        subject_data.course_start_at,
+        subject_data.course_end_at,
+    )
+    primary_course_time = course_times[0] if course_times else None
 
     existing = (
         db.query(Subject)
@@ -267,9 +362,10 @@ def create_subject(
         course_type=subject_data.course_type,
         status=subject_data.status,
         semester=semester_label,
-        weekly_schedule=subject_data.weekly_schedule,
-        course_start_at=subject_data.course_start_at,
-        course_end_at=subject_data.course_end_at,
+        weekly_schedule=primary_course_time.weekly_schedule if primary_course_time else subject_data.weekly_schedule,
+        course_start_at=primary_course_time.course_start_at if primary_course_time else subject_data.course_start_at,
+        course_end_at=primary_course_time.course_end_at if primary_course_time else subject_data.course_end_at,
+        course_times=_serialize_course_times_for_storage(course_times),
         description=subject_data.description,
     )
     db.add(course)
@@ -335,10 +431,28 @@ def update_subject(
     if current_user.role != UserRole.ADMIN:
         subject_data.teacher_id = current_user.id
 
-    for field in ["name", "teacher_id", "class_id", "course_type", "status", "weekly_schedule", "course_start_at", "course_end_at", "description"]:
+    for field in ["name", "teacher_id", "class_id", "course_type", "status", "description"]:
         value = getattr(subject_data, field)
         if value is not None:
             setattr(course, field, value)
+
+    if (
+        subject_data.course_times is not None
+        or subject_data.weekly_schedule is not None
+        or subject_data.course_start_at is not None
+        or subject_data.course_end_at is not None
+    ):
+        course_times = _resolve_course_times(
+            subject_data.course_times,
+            subject_data.weekly_schedule,
+            subject_data.course_start_at,
+            subject_data.course_end_at,
+        )
+        primary_course_time = course_times[0] if course_times else None
+        course.course_times = _serialize_course_times_for_storage(course_times)
+        course.weekly_schedule = primary_course_time.weekly_schedule if primary_course_time else None
+        course.course_start_at = primary_course_time.course_start_at if primary_course_time else None
+        course.course_end_at = primary_course_time.course_end_at if primary_course_time else None
 
     if subject_data.semester_id is not None or subject_data.semester is not None:
         semester_obj = _resolve_semester(

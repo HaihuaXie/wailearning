@@ -190,6 +190,18 @@ class StudentListResponse(BaseModel):
     data: List[StudentResponse]
 
 
+class CourseTimeItem(BaseModel):
+    weekly_schedule: str
+    course_start_at: datetime
+    course_end_at: datetime
+
+    @model_validator(mode="after")
+    def validate_date_range(self):
+        if self.course_end_at < self.course_start_at:
+            raise ValueError("Course end time must be later than start time.")
+        return self
+
+
 class SubjectCreate(BaseModel):
     name: str
     teacher_id: Optional[int] = None
@@ -202,6 +214,7 @@ class SubjectCreate(BaseModel):
     weekly_schedule: Optional[str] = None
     course_start_at: Optional[datetime] = None
     course_end_at: Optional[datetime] = None
+    course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
     students: Optional[List["CourseRosterStudentInput"]] = None
 
@@ -217,6 +230,7 @@ class SubjectUpdate(BaseModel):
     weekly_schedule: Optional[str] = None
     course_start_at: Optional[datetime] = None
     course_end_at: Optional[datetime] = None
+    course_times: Optional[List[CourseTimeItem]] = None
     description: Optional[str] = None
 
 
@@ -232,6 +246,7 @@ class SubjectResponse(BaseModel):
     weekly_schedule: Optional[str] = None
     course_start_at: Optional[datetime] = None
     course_end_at: Optional[datetime] = None
+    course_times: List[CourseTimeItem] = Field(default_factory=list)
     description: Optional[str] = None
     teacher_name: Optional[str] = None
     class_name: Optional[str] = None

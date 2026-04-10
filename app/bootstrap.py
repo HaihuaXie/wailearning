@@ -61,6 +61,7 @@ def ensure_schema_updates() -> None:
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS weekly_schedule VARCHAR",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_start_at TIMESTAMP",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_end_at TIMESTAMP",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_times TEXT",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS description VARCHAR",
         "ALTER TABLE course_enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR NOT NULL DEFAULT 'required'",
         """

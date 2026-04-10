@@ -34,12 +34,12 @@
       :closable="false"
       class="calendar-alert"
     >
-      当前课程的“每周时间”为旧版手填格式，暂时无法准确生成教学日历。请在课程管理里改成结构化课表时间后查看。
+      当前课程存在无法识别的每周时间格式，请先在课程管理里重新选择结构化课程时间后再查看教学日历。
     </el-alert>
 
     <el-empty
       v-else-if="!hasRenderableCalendar"
-      description="请先完善课程的起始日期、结束日期和每周时间。"
+      description="请先完善课程时间中的起始日期、结束日期和每周时间。"
     />
 
     <template v-else>
@@ -92,7 +92,14 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-import { PERIOD_OPTIONS, parseScheduleValue } from '@/utils/courseSchedule'
+import { parseScheduleValue } from '@/utils/courseSchedule'
+import {
+  formatCourseTimeEntry,
+  formatCourseTimeDateRange,
+  getCourseTimeDateBounds,
+  normalizeCourseBoundaryDate,
+  resolveCourseTimes
+} from '@/utils/courseTimes'
 import { buildHolidayMap } from '@/utils/holidayCalendar'
 
 const props = defineProps({
@@ -104,15 +111,14 @@ const props = defineProps({
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-const periodMap = Object.fromEntries(PERIOD_OPTIONS.map(item => [item.value, item]))
 const legacyWeekdayPatterns = [
-  { value: 1, label: '周一', patterns: [/周一/, /星期一/, /每周一/] },
-  { value: 2, label: '周二', patterns: [/周二/, /星期二/, /每周二/] },
-  { value: 3, label: '周三', patterns: [/周三/, /星期三/, /每周三/] },
-  { value: 4, label: '周四', patterns: [/周四/, /星期四/, /每周四/] },
-  { value: 5, label: '周五', patterns: [/周五/, /星期五/, /每周五/] },
-  { value: 6, label: '周六', patterns: [/周六/, /星期六/, /每周六/] },
-  { value: 7, label: '周日', patterns: [/周日/, /星期日/, /星期天/, /周天/, /每周日/, /每周天/] }
+  { value: 1, patterns: [/周一/, /星期一/, /每周一/] },
+  { value: 2, patterns: [/周二/, /星期二/, /每周二/] },
+  { value: 3, patterns: [/周三/, /星期三/, /每周三/] },
+  { value: 4, patterns: [/周四/, /星期四/, /每周四/] },
+  { value: 5, patterns: [/周五/, /星期五/, /每周五/] },
+  { value: 6, patterns: [/周六/, /星期六/, /每周六/] },
+  { value: 7, patterns: [/周日/, /星期日/, /星期天/, /周天/, /每周日/, /每周天/] }
 ]
 
 const currentMonth = ref(new Date())
@@ -125,30 +131,6 @@ const toDateKey = date => {
 }
 
 const addDays = (date, days) => new Date(date.getTime() + days * ONE_DAY_MS)
-
-const normalizeBoundaryDate = value => {
-  if (!value) {
-    return null
-  }
-
-  if (value instanceof Date) {
-    return new Date(value.getFullYear(), value.getMonth(), value.getDate())
-  }
-
-  const rawValue = `${value}`.trim()
-  const matchedDate = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/)
-
-  if (matchedDate) {
-    return new Date(Number(matchedDate[1]), Number(matchedDate[2]) - 1, Number(matchedDate[3]))
-  }
-
-  const parsedDate = new Date(rawValue)
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null
-  }
-
-  return new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate())
-}
 
 const normalizePeriods = periods => [...new Set(periods)].sort((left, right) => left - right)
 
@@ -178,21 +160,6 @@ const formatCompactPeriodSummary = periods => {
   return groups.join('、')
 }
 
-const formatDetailedPeriodSummary = periods => {
-  const sortedPeriods = normalizePeriods(periods)
-
-  if (!sortedPeriods.length) {
-    return '常规授课'
-  }
-
-  return sortedPeriods
-    .map(periodValue => {
-      const period = periodMap[periodValue]
-      return period ? `第${periodValue}小节(${period.time})` : `第${periodValue}小节`
-    })
-    .join('、')
-}
-
 const extractLegacyWeekdays = scheduleText => {
   const normalizedText = `${scheduleText || ''}`.trim()
 
@@ -205,14 +172,8 @@ const extractLegacyWeekdays = scheduleText => {
   )
 }
 
-const courseStartDate = computed(() => normalizeBoundaryDate(props.course?.course_start_at))
-const courseEndDate = computed(() => normalizeBoundaryDate(props.course?.course_end_at))
-const hasValidRange = computed(() =>
-  Boolean(courseStartDate.value && courseEndDate.value && courseEndDate.value >= courseStartDate.value)
-)
-
-const scheduleByDay = computed(() => {
-  const parsedSlots = parseScheduleValue(props.course?.weekly_schedule)
+const buildScheduleByDay = scheduleText => {
+  const parsedSlots = parseScheduleValue(scheduleText)
 
   if (parsedSlots.length) {
     return parsedSlots.reduce((map, slot) => {
@@ -229,24 +190,41 @@ const scheduleByDay = computed(() => {
     }, new Map())
   }
 
-  const legacyWeekdays = extractLegacyWeekdays(props.course?.weekly_schedule)
-
-  return legacyWeekdays.reduce((map, day) => {
+  return extractLegacyWeekdays(scheduleText).reduce((map, day) => {
     map.set(day.value, [])
     return map
   }, new Map())
-})
+}
 
-const hasSchedule = computed(() => scheduleByDay.value.size > 0)
+const courseTimeEntries = computed(() =>
+  resolveCourseTimes(props.course).map(item => ({
+    ...item,
+    startDate: normalizeCourseBoundaryDate(item.course_start_at),
+    endDate: normalizeCourseBoundaryDate(item.course_end_at),
+    scheduleByDay: buildScheduleByDay(item.weekly_schedule)
+  }))
+)
+
+const validCourseTimeEntries = computed(() =>
+  courseTimeEntries.value.filter(item =>
+    item.startDate && item.endDate && item.endDate >= item.startDate && item.scheduleByDay.size > 0
+  )
+)
+
 const hasUnsupportedSchedule = computed(() =>
-  Boolean(props.course?.weekly_schedule) && !hasSchedule.value
+  courseTimeEntries.value.some(item => Boolean(item.weekly_schedule) && item.scheduleByDay.size === 0)
 )
+
 const hasRenderableCalendar = computed(() =>
-  hasValidRange.value && hasSchedule.value && !hasUnsupportedSchedule.value
+  validCourseTimeEntries.value.length > 0 && !hasUnsupportedSchedule.value
 )
+
+const courseDateBounds = computed(() => getCourseTimeDateBounds(props.course))
 
 const holidayMap = computed(() =>
-  hasValidRange.value ? buildHolidayMap(courseStartDate.value, courseEndDate.value) : {}
+  courseDateBounds.value.startDate && courseDateBounds.value.endDate
+    ? buildHolidayMap(courseDateBounds.value.startDate, courseDateBounds.value.endDate)
+    : {}
 )
 
 const classDateMap = computed(() => {
@@ -255,28 +233,36 @@ const classDateMap = computed(() => {
   }
 
   const entries = {}
-  let currentDateValue = new Date(courseStartDate.value)
 
-  while (currentDateValue <= courseEndDate.value) {
-    const dayValue = currentDateValue.getDay() === 0 ? 7 : currentDateValue.getDay()
-    const periods = scheduleByDay.value.get(dayValue) || []
-    const dateKey = toDateKey(currentDateValue)
+  for (const courseTime of validCourseTimeEntries.value) {
+    let currentDateValue = new Date(courseTime.startDate)
 
-    if (scheduleByDay.value.has(dayValue) && !holidayMap.value[dateKey]) {
-      entries[dateKey] = {
-        periods,
-        summary: formatCompactPeriodSummary(periods)
+    while (currentDateValue <= courseTime.endDate) {
+      const dayValue = currentDateValue.getDay() === 0 ? 7 : currentDateValue.getDay()
+      const periods = courseTime.scheduleByDay.get(dayValue) || []
+      const dateKey = toDateKey(currentDateValue)
+
+      if (courseTime.scheduleByDay.has(dayValue) && !holidayMap.value[dateKey]) {
+        const mergedPeriods = normalizePeriods([
+          ...(entries[dateKey]?.periods || []),
+          ...periods
+        ])
+
+        entries[dateKey] = {
+          periods: mergedPeriods,
+          summary: formatCompactPeriodSummary(mergedPeriods)
+        }
       }
-    }
 
-    currentDateValue = addDays(currentDateValue, 1)
+      currentDateValue = addDays(currentDateValue, 1)
+    }
   }
 
   return entries
 })
 
 const resolveDateMeta = date => {
-  const normalizedDate = normalizeBoundaryDate(date)
+  const normalizedDate = normalizeCourseBoundaryDate(date)
 
   if (!normalizedDate) {
     return { dateKey: '', holiday: null, classDay: null }
@@ -287,7 +273,7 @@ const resolveDateMeta = date => {
   const holiday = holidayMap.value[dateKey]
     ? {
         ...holidayMap.value[dateKey],
-        suspendsClass: scheduleByDay.value.has(dayValue)
+        suspendsClass: validCourseTimeEntries.value.some(item => item.scheduleByDay.has(dayValue))
       }
     : null
 
@@ -302,28 +288,22 @@ const currentMonthLabel = computed(() =>
   `${currentMonth.value.getFullYear()}年${currentMonth.value.getMonth() + 1}月`
 )
 
-const scheduleLabel = computed(() => {
-  const grouped = [...scheduleByDay.value.entries()].sort((left, right) => left[0] - right[0])
-
-  if (!grouped.length) {
-    return ''
-  }
-
-  return grouped
-    .map(([dayValue, periods]) => {
-      const dayLabel = weekdayLabels[dayValue - 1] || `周${dayValue}`
-      const detail = periods.length ? formatDetailedPeriodSummary(periods) : '常规授课'
-      return `${dayLabel} ${detail}`
-    })
+const scheduleLabel = computed(() =>
+  validCourseTimeEntries.value
+    .map(formatCourseTimeEntry)
+    .filter(Boolean)
     .join('；')
-})
+)
 
 const courseRangeLabel = computed(() => {
-  if (!hasValidRange.value) {
+  if (!validCourseTimeEntries.value.length) {
     return '未设置教学周期'
   }
 
-  return `${toDateKey(courseStartDate.value)} 至 ${toDateKey(courseEndDate.value)}`
+  return validCourseTimeEntries.value
+    .map(item => formatCourseTimeDateRange(item.startDate, item.endDate))
+    .filter(Boolean)
+    .join('；')
 })
 
 const calendarCells = computed(() => {
@@ -351,7 +331,7 @@ const visibleMonthStats = computed(() => {
   const targetMonth = currentMonth.value.getMonth()
 
   const isCurrentMonthDateKey = dateKey => {
-    const date = normalizeBoundaryDate(dateKey)
+    const date = normalizeCourseBoundaryDate(dateKey)
     return date && date.getFullYear() === targetYear && date.getMonth() === targetMonth
   }
 
@@ -362,15 +342,14 @@ const visibleMonthStats = computed(() => {
 })
 
 const resolveInitialMonth = course => {
-  const startDate = normalizeBoundaryDate(course?.course_start_at)
-  const endDate = normalizeBoundaryDate(course?.course_end_at)
-  const today = normalizeBoundaryDate(new Date())
+  const bounds = getCourseTimeDateBounds(course)
+  const today = normalizeCourseBoundaryDate(new Date())
 
-  if (startDate && endDate && today >= startDate && today <= endDate) {
+  if (bounds.startDate && bounds.endDate && today >= bounds.startDate && today <= bounds.endDate) {
     return today
   }
 
-  return startDate || today || new Date()
+  return bounds.startDate || today || new Date()
 }
 
 const goToPreviousMonth = () => {

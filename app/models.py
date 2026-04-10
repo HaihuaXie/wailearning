@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
@@ -110,6 +111,7 @@ class Subject(Base):
     weekly_schedule = Column(String, nullable=True)
     course_start_at = Column(DateTime(timezone=True), nullable=True)
     course_end_at = Column(DateTime(timezone=True), nullable=True)
+    course_times = Column(Text, nullable=True)
     description = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

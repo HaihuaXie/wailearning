@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">课程管理</h1>
-        <p class="page-subtitle">教师新建的课程会自动同步到这里，管理员可以统一查看、编辑课程排期与任课信息。</p>
+        <p class="page-subtitle">管理员可以统一查看、编辑课程信息与课程时间安排。</p>
       </div>
       <el-button type="primary" @click="openCreateDialog">
         新建课程
@@ -30,14 +30,18 @@
           </template>
         </el-table-column>
         <el-table-column prop="semester" label="学期" width="140" />
-        <el-table-column label="每周上课时间" min-width="260" show-overflow-tooltip>
+        <el-table-column label="课程时间" min-width="360">
           <template #default="{ row }">
-            {{ formatScheduleDisplay(row.weekly_schedule) || '未设置' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="课程起止" min-width="220">
-          <template #default="{ row }">
-            {{ formatDateRange(row.course_start_at, row.course_end_at) }}
+            <div v-if="getCourseTimeLines(row).length" class="course-time-list">
+              <div
+                v-for="(line, index) in getCourseTimeLines(row)"
+                :key="`${row.id}-${index}`"
+                class="course-time-line"
+              >
+                {{ line }}
+              </div>
+            </div>
+            <span v-else>未设置</span>
           </template>
         </el-table-column>
         <el-table-column prop="student_count" label="学生数" width="100" />
@@ -54,7 +58,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingCourse ? '编辑课程' : '新建课程'"
-      width="880px"
+      width="960px"
       destroy-on-close
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
@@ -88,27 +92,65 @@
             <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="起始日期" prop="course_start_at">
-          <el-date-picker
-            v-model="form.course_start_at"
-            type="date"
-            placeholder="请选择起始日期"
-            style="width: 100%"
-            value-format="YYYY-MM-DD"
-          />
+
+        <el-form-item label="课程时间" prop="course_times" class="course-times-form-item">
+          <div class="course-times-editor">
+            <div
+              v-for="(courseTime, index) in form.course_times"
+              :key="`course-time-${index}`"
+              class="course-time-panel"
+            >
+              <div class="course-time-panel__header">
+                <div>
+                  <div class="course-time-panel__title">课程时间 {{ index + 1 }}</div>
+                  <div class="course-time-panel__subtitle">
+                    设置这一段时间内的起始日期、结束日期和每周时间
+                  </div>
+                </div>
+                <el-button
+                  v-if="form.course_times.length > 1"
+                  text
+                  type="danger"
+                  @click="removeCourseTime(index)"
+                >
+                  删除
+                </el-button>
+              </div>
+
+              <div class="course-time-panel__fields">
+                <el-form-item :prop="`course_times.${index}.course_start_at`" label="起始日期" label-width="80px">
+                  <el-date-picker
+                    v-model="courseTime.course_start_at"
+                    type="date"
+                    placeholder="请选择起始日期"
+                    style="width: 100%"
+                    value-format="YYYY-MM-DD"
+                  />
+                </el-form-item>
+
+                <el-form-item :prop="`course_times.${index}.course_end_at`" label="结束日期" label-width="80px">
+                  <el-date-picker
+                    v-model="courseTime.course_end_at"
+                    type="date"
+                    placeholder="请选择结束日期"
+                    style="width: 100%"
+                    value-format="YYYY-MM-DD"
+                  />
+                </el-form-item>
+              </div>
+
+              <div class="course-time-panel__schedule">
+                <div class="course-time-panel__schedule-label">每周时间</div>
+                <CourseSchedulePicker v-model="courseTime.weekly_schedule" />
+              </div>
+            </div>
+
+            <el-button plain class="course-times-editor__add" @click="addCourseTime">
+              添加课程时间
+            </el-button>
+          </div>
         </el-form-item>
-        <el-form-item label="结束日期" prop="course_end_at">
-          <el-date-picker
-            v-model="form.course_end_at"
-            type="date"
-            placeholder="请选择结束日期"
-            style="width: 100%"
-            value-format="YYYY-MM-DD"
-          />
-        </el-form-item>
-        <el-form-item label="每周时间" prop="weekly_schedule">
-          <CourseSchedulePicker v-model="form.weekly_schedule" />
-        </el-form-item>
+
         <el-form-item label="课程简介" prop="description">
           <el-input v-model="form.description" type="textarea" :rows="4" />
         </el-form-item>
@@ -127,7 +169,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import api from '@/api'
 import CourseSchedulePicker from '@/components/CourseSchedulePicker.vue'
-import { formatScheduleValue, parseScheduleValue } from '@/utils/courseSchedule'
+import { parseScheduleValue } from '@/utils/courseSchedule'
+import {
+  createEmptyCourseTime,
+  formatCourseTimeEntry,
+  normalizeEditableCourseTimes,
+  serializeCourseTimesPayload
+} from '@/utils/courseTimes'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -147,32 +195,42 @@ const form = reactive({
   semester_id: null,
   course_type: 'required',
   status: 'active',
-  weekly_schedule: '',
-  course_start_at: '',
-  course_end_at: '',
+  course_times: [createEmptyCourseTime()],
   description: ''
 })
+
+const validateCourseTimes = (_rule, value, callback) => {
+  if (!Array.isArray(value) || !value.length) {
+    callback(new Error('请至少添加一组课程时间'))
+    return
+  }
+
+  for (const item of value) {
+    if (!item.course_start_at || !item.course_end_at) {
+      callback(new Error('请为每组课程时间选择起始日期和结束日期'))
+      return
+    }
+
+    if (new Date(item.course_end_at) < new Date(item.course_start_at)) {
+      callback(new Error('课程时间的结束日期不能早于起始日期'))
+      return
+    }
+
+    if (!parseScheduleValue(item.weekly_schedule).length) {
+      callback(new Error('请为每组课程时间选择每周时间'))
+      return
+    }
+  }
+
+  callback()
+}
 
 const rules = {
   name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
   class_id: [{ required: true, message: '请选择所属班级', trigger: 'change' }],
   course_type: [{ required: true, message: '请选择课程类型', trigger: 'change' }],
   status: [{ required: true, message: '请选择课程状态', trigger: 'change' }],
-  weekly_schedule: [
-    {
-      validator: (_rule, value, callback) => {
-        if (parseScheduleValue(value).length) {
-          callback()
-          return
-        }
-
-        callback(new Error('请选择至少一个上课时间'))
-      },
-      trigger: 'change'
-    }
-  ],
-  course_start_at: [{ required: true, message: '请选择起始日期', trigger: 'change' }],
-  course_end_at: [{ required: true, message: '请选择结束日期', trigger: 'change' }]
+  course_times: [{ validator: validateCourseTimes, trigger: 'change' }]
 }
 
 const resetForm = () => {
@@ -183,9 +241,7 @@ const resetForm = () => {
     semester_id: null,
     course_type: 'required',
     status: 'active',
-    weekly_schedule: '',
-    course_start_at: '',
-    course_end_at: '',
+    course_times: [createEmptyCourseTime()],
     description: ''
   })
 }
@@ -210,50 +266,30 @@ const loadOptions = async () => {
   semesters.value = semesterData || []
 }
 
+const addCourseTime = () => {
+  form.course_times.push(createEmptyCourseTime())
+  formRef.value?.clearValidate('course_times')
+}
+
+const removeCourseTime = index => {
+  if (form.course_times.length <= 1) {
+    return
+  }
+
+  form.course_times.splice(index, 1)
+  formRef.value?.clearValidate('course_times')
+}
+
 const openCreateDialog = () => {
   editingCourse.value = null
   resetForm()
   dialogVisible.value = true
 }
 
-const normalizeDateField = value => {
-  if (!value) {
-    return ''
-  }
-
-  const rawValue = `${value}`.trim()
-  const matchedDate = rawValue.match(/^(\d{4}-\d{2}-\d{2})/)
-
-  if (matchedDate) {
-    return matchedDate[1]
-  }
-
-  const parsedDate = new Date(rawValue)
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return rawValue
-  }
-
-  const year = parsedDate.getFullYear()
-  const month = `${parsedDate.getMonth() + 1}`.padStart(2, '0')
-  const day = `${parsedDate.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const serializeDateField = (value, boundary) => {
-  const normalizedDate = normalizeDateField(value)
-
-  if (!normalizedDate) {
-    return ''
-  }
-
-  return boundary === 'end'
-    ? `${normalizedDate}T23:59:59`
-    : `${normalizedDate}T00:00:00`
-}
-
 const openEditDialog = course => {
   editingCourse.value = course
+  const normalizedCourseTimes = normalizeEditableCourseTimes(course)
+
   Object.assign(form, {
     name: course.name,
     class_id: course.class_id,
@@ -261,44 +297,31 @@ const openEditDialog = course => {
     semester_id: course.semester_id ?? null,
     course_type: course.course_type || 'required',
     status: course.status || 'active',
-    weekly_schedule: course.weekly_schedule || '',
-    course_start_at: normalizeDateField(course.course_start_at),
-    course_end_at: normalizeDateField(course.course_end_at),
+    course_times: normalizedCourseTimes.length ? normalizedCourseTimes : [createEmptyCourseTime()],
     description: course.description || ''
   })
   dialogVisible.value = true
 }
 
-const formatDate = dateStr => {
-  if (!dateStr) {
-    return '未设置'
-  }
-
-  const date = new Date(dateStr)
-
-  if (Number.isNaN(date.getTime())) {
-    return dateStr
-  }
-
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
-}
-
-const formatDateRange = (startAt, endAt) => `${formatDate(startAt)} - ${formatDate(endAt)}`
-const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
+const getCourseTimeLines = course =>
+  normalizeEditableCourseTimes(course)
+    .map(formatCourseTimeEntry)
+    .filter(Boolean)
 
 const submitForm = async () => {
   await formRef.value.validate()
   submitting.value = true
+
   try {
     const payload = {
-      ...form,
+      name: form.name,
+      class_id: form.class_id,
+      teacher_id: form.teacher_id,
       semester_id: form.semester_id || null,
-      course_start_at: serializeDateField(form.course_start_at, 'start'),
-      course_end_at: serializeDateField(form.course_end_at, 'end')
+      course_type: form.course_type,
+      status: form.status,
+      course_times: serializeCourseTimesPayload(form.course_times),
+      description: form.description
     }
 
     if (editingCourse.value) {
@@ -308,6 +331,7 @@ const submitForm = async () => {
       await api.courses.create(payload)
       ElMessage.success('课程已创建')
     }
+
     dialogVisible.value = false
     await loadCourses()
   } finally {
@@ -357,8 +381,88 @@ onMounted(async () => {
   color: #64748b;
 }
 
+.course-time-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.course-time-line {
+  line-height: 1.6;
+  color: #334155;
+}
+
+.course-times-editor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.course-times-editor__add {
+  align-self: flex-start;
+}
+
+.course-time-panel {
+  border: 1px solid #dbe4f0;
+  border-radius: 18px;
+  padding: 18px;
+  background: #f8fbff;
+}
+
+.course-time-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.course-time-panel__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.course-time-panel__subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.course-time-panel__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.course-time-panel__fields :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.course-time-panel__schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.course-time-panel__schedule-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
 @media (max-width: 768px) {
   .page-header {
+    flex-direction: column;
+  }
+
+  .course-time-panel__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .course-time-panel__header {
     flex-direction: column;
   }
 }

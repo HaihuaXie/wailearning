@@ -22,8 +22,8 @@
           <strong>{{ selectedCourse.teacher_name || '未分配' }}</strong>
         </article>
         <article class="overview-card">
-          <span class="overview-label">每周时间</span>
-          <strong>{{ formatScheduleDisplay(selectedCourse.weekly_schedule) || '未设置' }}</strong>
+          <span class="overview-label">课程时间</span>
+          <strong>{{ formatCourseTimeDisplay(selectedCourse) || '未设置' }}</strong>
         </article>
       </section>
 
@@ -119,7 +119,7 @@ import { useRouter } from 'vue-router'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { formatScheduleValue } from '@/utils/courseSchedule'
+import { formatCourseTimes } from '@/utils/courseTimes'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -129,12 +129,14 @@ const loading = ref(false)
 const materials = ref([])
 const homeworks = ref([])
 const notifications = ref([])
-const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
+
+const formatCourseTimeDisplay = course => formatCourseTimes(course)
 
 const formatDate = value => {
   if (!value) {
     return '未设置'
   }
+
   return new Date(value).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -162,6 +164,7 @@ const loadWorkspace = async () => {
   }
 
   loading.value = true
+
   try {
     const [materialsResult, homeworksResult, notificationsResult] = await Promise.all([
       api.materials.list({
