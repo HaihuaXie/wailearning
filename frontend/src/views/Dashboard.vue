@@ -20,40 +20,42 @@
       description="请先选择一门课程。"
     />
 
-    <div v-else class="dashboard-grid">
-      <div class="metrics-grid">
+    <div v-else class="dashboard-layout">
+      <div class="dashboard-left">
+        <div class="metrics-grid">
+          <button
+            v-for="card in statCards"
+            :key="card.label"
+            type="button"
+            class="metric-card"
+            @click="goTo(card.path)"
+          >
+            <div class="metric-icon" :style="{ background: card.color }">
+              <el-icon :size="24"><component :is="card.icon" /></el-icon>
+            </div>
+            <div class="metric-content">
+              <div class="metric-value">{{ card.value }}</div>
+              <div class="metric-label">{{ card.label }}</div>
+            </div>
+          </button>
+        </div>
+
         <button
-          v-for="card in statCards"
-          :key="card.label"
           type="button"
-          class="metric-card"
-          @click="goTo(card.path)"
+          class="score-card"
+          @click="goTo('/scores')"
         >
-          <div class="metric-icon" :style="{ background: card.color }">
-            <el-icon :size="24"><component :is="card.icon" /></el-icon>
+          <div class="score-card__header">
+            <h3>平均成绩</h3>
+            <span class="score-card__link">前往成绩管理</span>
           </div>
-          <div class="metric-content">
-            <div class="metric-value">{{ card.value }}</div>
-            <div class="metric-label">{{ card.label }}</div>
-          </div>
+          <div ref="scoreChartRef" class="chart-box"></div>
         </button>
       </div>
 
       <div class="calendar-card">
         <TeachingCalendar :course="selectedCourse" />
       </div>
-
-      <button
-        type="button"
-        class="score-card"
-        @click="goTo('/scores')"
-      >
-        <div class="score-card__header">
-          <h3>平均成绩</h3>
-          <span class="score-card__link">前往成绩管理</span>
-        </div>
-        <div ref="scoreChartRef" class="chart-box"></div>
-      </button>
     </div>
   </div>
 </template>
@@ -62,7 +64,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { Bell, CollectionTag, Document, Histogram, User } from '@element-plus/icons-vue'
+import { Bell, CollectionTag, Document, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
 import TeachingCalendar from '@/components/TeachingCalendar.vue'
@@ -271,20 +273,24 @@ watch(selectedCourse, async () => {
   color: #64748b;
 }
 
-.dashboard-grid {
+.dashboard-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(520px, 2.1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   align-items: stretch;
+}
+
+.dashboard-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  align-self: start;
 }
 
 .metric-card,
@@ -341,14 +347,11 @@ watch(selectedCourse, async () => {
 }
 
 .calendar-card {
-  grid-column: 2;
-  grid-row: 1 / span 2;
   padding: 22px;
+  min-width: 0;
 }
 
 .score-card {
-  grid-column: 1 / span 2;
-  grid-row: 3;
   padding: 22px;
   text-align: left;
 }
@@ -371,19 +374,12 @@ watch(selectedCourse, async () => {
 }
 
 .chart-box {
-  height: 320px;
+  height: 280px;
 }
 
 @media (max-width: 1100px) {
-  .dashboard-grid {
+  .dashboard-layout {
     grid-template-columns: 1fr;
-  }
-
-  .metrics-grid,
-  .calendar-card,
-  .score-card {
-    grid-column: auto;
-    grid-row: auto;
   }
 }
 
