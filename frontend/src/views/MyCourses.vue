@@ -136,8 +136,10 @@
             <el-radio label="completed">已结束</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="所属学期">
-          <el-input v-model="form.semester" placeholder="例如：2026-1" />
+        <el-form-item label="所属学期" prop="semester_id">
+          <el-select v-model="form.semester_id" placeholder="请选择学期" style="width: 100%" clearable>
+            <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="每周上课时间" prop="weekly_schedule">
           <el-input v-model="form.weekly_schedule" placeholder="例如：每周二 19:00-21:00" />
@@ -220,6 +222,7 @@ const TEMPLATE_ROWS = [
 const loading = ref(false)
 const submitting = ref(false)
 const courses = ref([])
+const semesters = ref([])
 const dialogVisible = ref(false)
 const formRef = ref(null)
 const fileInputRef = ref(null)
@@ -229,7 +232,7 @@ const form = reactive({
   name: '',
   course_type: 'required',
   status: 'active',
-  semester: '',
+  semester_id: null,
   weekly_schedule: '',
   course_start_at: '',
   course_end_at: '',
@@ -264,12 +267,16 @@ const loadCourses = async () => {
   }
 }
 
+const loadSemesters = async () => {
+  semesters.value = await api.semesters.list()
+}
+
 const resetForm = () => {
   Object.assign(form, {
     name: '',
     course_type: 'required',
     status: 'active',
-    semester: '',
+    semester_id: null,
     weekly_schedule: '',
     course_start_at: '',
     course_end_at: '',
@@ -547,6 +554,7 @@ const submitForm = async () => {
   try {
     const createdCourse = await api.courses.create({
       ...form,
+      semester_id: form.semester_id || null,
       students: rosterStudents.value
     })
     await Promise.all([loadCourses(), userStore.fetchTeachingCourses(true)])
@@ -560,7 +568,7 @@ const submitForm = async () => {
 }
 
 onMounted(() => {
-  loadCourses()
+  Promise.all([loadCourses(), loadSemesters()])
 })
 </script>
 

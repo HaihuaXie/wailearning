@@ -103,6 +103,7 @@ class Subject(Base):
     name = Column(String, nullable=False)
     teacher_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    semester_id = Column(Integer, ForeignKey("semesters.id"), nullable=True)
     course_type = Column(String, nullable=False, default="required")
     status = Column(String, nullable=False, default="active")
     semester = Column(String, nullable=True)
@@ -114,6 +115,7 @@ class Subject(Base):
 
     teacher = relationship("User", back_populates="courses")
     class_obj = relationship("Class", back_populates="courses")
+    semester_obj = relationship("Semester")
     scores = relationship("Score", back_populates="subject")
     homeworks = relationship("Homework", back_populates="subject")
     attendances = relationship("Attendance", back_populates="subject")

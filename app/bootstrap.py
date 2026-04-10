@@ -8,16 +8,25 @@ from app.auth import get_password_hash
 from app.config import settings
 from app.course_access import sync_course_enrollments
 from app.database import Base, SessionLocal, engine
-from app.models import Semester, Subject, SystemSetting, User, UserRole
+from app.models import Score, Semester, Subject, SystemSetting, User, UserRole
 
 
 DEFAULT_SEMESTERS = [
-    {"name": "2024-1", "year": 2024},
-    {"name": "2024-2", "year": 2024},
-    {"name": "2025-1", "year": 2025},
-    {"name": "2025-2", "year": 2025},
-    {"name": "2026-1", "year": 2026},
-    {"name": "2026-2", "year": 2026},
+    {"name": "2024-春季", "year": 2024},
+    {"name": "2024-秋季", "year": 2024},
+    {"name": "2025-春季", "year": 2025},
+    {"name": "2025-秋季", "year": 2025},
+    {"name": "2026-春季", "year": 2026},
+    {"name": "2026-秋季", "year": 2026},
+]
+
+DEFAULT_SEMESTERS = [
+    {"name": "2024-\u6625\u5b63", "year": 2024},
+    {"name": "2024-\u79cb\u5b63", "year": 2024},
+    {"name": "2025-\u6625\u5b63", "year": 2025},
+    {"name": "2025-\u79cb\u5b63", "year": 2025},
+    {"name": "2026-\u6625\u5b63", "year": 2026},
+    {"name": "2026-\u79cb\u5b63", "year": 2026},
 ]
 
 DEFAULT_SYSTEM_SETTINGS = [
@@ -45,6 +54,7 @@ def ensure_schema_updates() -> None:
     alter_statements = [
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS teacher_id INTEGER REFERENCES users(id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id)",
+        "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS semester_id INTEGER REFERENCES semesters(id)",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS course_type VARCHAR NOT NULL DEFAULT 'required'",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS status VARCHAR NOT NULL DEFAULT 'active'",
         "ALTER TABLE subjects ADD COLUMN IF NOT EXISTS semester VARCHAR",
@@ -85,6 +95,7 @@ def ensure_schema_updates() -> None:
                 .replace(" ADD COLUMN IF NOT EXISTS ", " ADD COLUMN ")
                 .replace(" INTEGER REFERENCES users(id)", " INTEGER")
                 .replace(" INTEGER REFERENCES classes(id)", " INTEGER")
+                .replace(" INTEGER REFERENCES semesters(id)", " INTEGER")
                 .replace(" INTEGER REFERENCES subjects(id)", " INTEGER")
             )
             try:
@@ -137,6 +148,97 @@ def seed_default_semesters(db) -> None:
     if created:
         db.commit()
     print(f"Ensured default semesters. Added {created} item(s).")
+
+
+def normalize_semester_name(name: str | None) -> str | None:
+    if not name:
+        return name
+
+    normalized = name.strip()
+    match = re.fullmatch(r"(\d{4})-(1|2)", normalized)
+    if not match:
+        return normalized
+
+    year, term = match.groups()
+    return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
+    return f"{year}-春季" if term == "1" else f"{year}-秋季"
+
+
+def normalize_semester_catalog(db) -> None:
+    semesters = db.query(Semester).order_by(Semester.created_at.asc(), Semester.id.asc()).all()
+    changed = 0
+
+    for semester in semesters:
+        normalized_name = normalize_semester_name(semester.name)
+        if not normalized_name or normalized_name == semester.name:
+            continue
+
+        old_name = semester.name
+        existing = db.query(Semester).filter(Semester.name == normalized_name).first()
+        if existing and existing.id != semester.id:
+            db.query(Subject).filter(Subject.semester_id == semester.id).update(
+                {Subject.semester_id: existing.id},
+                synchronize_session=False
+            )
+            db.query(Subject).filter(Subject.semester == old_name).update(
+                {Subject.semester: normalized_name},
+                synchronize_session=False
+            )
+            db.query(Score).filter(Score.semester == old_name).update(
+                {Score.semester: normalized_name},
+                synchronize_session=False
+            )
+            db.delete(semester)
+            changed += 1
+            continue
+
+        semester.name = normalized_name
+        if normalized_name[:4].isdigit():
+            semester.year = int(normalized_name[:4])
+        db.query(Subject).filter(Subject.semester == old_name).update(
+            {Subject.semester: normalized_name},
+            synchronize_session=False
+        )
+        db.query(Score).filter(Score.semester == old_name).update(
+            {Score.semester: normalized_name},
+            synchronize_session=False
+        )
+        changed += 1
+
+    if changed:
+        db.commit()
+    print(f"Normalized semester catalog. Updated {changed} item(s).")
+
+
+def sync_subject_semester_links(db) -> None:
+    semesters = db.query(Semester).order_by(Semester.year.asc(), Semester.created_at.asc(), Semester.id.asc()).all()
+    semesters_by_name = {semester.name: semester for semester in semesters}
+    updated = 0
+
+    for course in db.query(Subject).all():
+        matched_semester = None
+
+        if course.semester_id:
+            matched_semester = next((semester for semester in semesters if semester.id == course.semester_id), None)
+
+        if not matched_semester and course.semester:
+            normalized_name = normalize_semester_name(course.semester)
+            matched_semester = semesters_by_name.get(normalized_name)
+
+        if not matched_semester:
+            continue
+
+        if course.semester_id != matched_semester.id:
+            course.semester_id = matched_semester.id
+            updated += 1
+
+        if course.semester != matched_semester.name:
+            course.semester = matched_semester.name
+            updated += 1
+
+    if updated:
+        db.commit()
+    print(f"Ensured subject semester links. Updated {updated} field(s).")
 
 
 def seed_default_system_settings(db) -> None:
@@ -196,9 +298,13 @@ def bootstrap() -> None:
     db = SessionLocal()
     try:
         normalize_teacher_class_assignments(db)
+        normalize_semester_catalog(db)
+        sync_subject_semester_links(db)
         if settings.INIT_DEFAULT_DATA:
             seed_default_admin(db)
             seed_default_semesters(db)
+            normalize_semester_catalog(db)
+            sync_subject_semester_links(db)
             seed_default_system_settings(db)
             sync_existing_courses(db)
         else:
