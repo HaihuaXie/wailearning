@@ -6,14 +6,15 @@
         <p class="page-subtitle">
           {{ selectedCourse ? `${selectedCourse.name} · ${selectedCourse.class_name || '未分班级'}` : '请先选择一门课程。' }}
         </p>
-        <p v-if="selectedCourse?.weekly_schedule || selectedCourse?.course_start_at || selectedCourse?.course_end_at" class="page-subtitle secondary-subtitle">
-          {{ formatScheduleDisplay(selectedCourse?.weekly_schedule) || '未设置每周时间' }} · {{ formatDateRange(selectedCourse?.course_start_at, selectedCourse?.course_end_at) }}
+        <p
+          v-if="selectedCourse?.weekly_schedule || selectedCourse?.course_start_at || selectedCourse?.course_end_at"
+          class="page-subtitle secondary-subtitle"
+        >
+          {{ formatScheduleDisplay(selectedCourse?.weekly_schedule) || '未设置每周时间' }} ·
+          {{ formatDateRange(selectedCourse?.course_start_at, selectedCourse?.course_end_at) }}
         </p>
       </div>
-      <div class="header-actions">
-        <el-button v-if="userStore.isTeacher || userStore.isClassTeacher" type="primary" plain @click="router.push('/courses')">
-          新建课程
-        </el-button>
+      <div v-if="showSemesterFilter" class="header-actions">
         <el-select v-model="semester" placeholder="选择学期" style="width: 220px" @change="loadAll">
           <el-option label="全部学期" value="" />
           <el-option v-for="item in semesters" :key="item.value" :label="item.label" :value="item.value" />
@@ -22,7 +23,7 @@
     </div>
 
     <el-empty
-      v-if="!selectedCourse && !userStore.isAdmin"
+      v-if="!selectedCourse && isTeachingDashboard"
       description="请先选择一门课程。"
     />
 
@@ -50,8 +51,12 @@
         </el-col>
         <el-col :span="12">
           <div class="chart-card">
-            <h3>最近成绩</h3>
-            <el-table :data="stats.recent_scores" max-height="320">
+            <h3>{{ isTeachingDashboard ? '教学日历' : '最近成绩' }}</h3>
+            <TeachingCalendar
+              v-if="isTeachingDashboard"
+              :course="selectedCourse"
+            />
+            <el-table v-else :data="stats.recent_scores" max-height="320">
               <el-table-column prop="student_name" label="学生" />
               <el-table-column prop="subject_name" label="课程" />
               <el-table-column prop="score" label="成绩" width="90" />
@@ -74,18 +79,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { Clock, Collection, School, User } from '@element-plus/icons-vue'
 
 import api from '@/api'
+import TeachingCalendar from '@/components/TeachingCalendar.vue'
 import { useUserStore } from '@/stores/user'
 import { formatScheduleValue } from '@/utils/courseSchedule'
 
-const router = useRouter()
 const userStore = useUserStore()
 const selectedCourse = computed(() => userStore.selectedCourse)
+const isTeachingDashboard = computed(() => userStore.isTeacher || userStore.isClassTeacher)
+const showSemesterFilter = computed(() => !isTeachingDashboard.value)
 const formatScheduleDisplay = value => formatScheduleValue(value) || value || ''
 
 const semester = ref('')
@@ -122,12 +128,17 @@ const formatDate = value => {
   if (!value) {
     return '未设置'
   }
-  return new Date(value).toLocaleString('zh-CN', {
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return date.toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    day: '2-digit'
   })
 }
 
@@ -141,6 +152,18 @@ const loadSemesters = async () => {
   }))
 }
 
+const resetStats = () => {
+  Object.assign(stats, {
+    total_students: 0,
+    total_classes: 0,
+    total_scores: 0,
+    avg_score: 0,
+    attendance_rate: 0,
+    recent_scores: [],
+    class_rankings: []
+  })
+}
+
 const loadStats = async () => {
   const data = await api.dashboard.getStats(buildQuery())
   Object.assign(stats, data || {})
@@ -148,6 +171,18 @@ const loadStats = async () => {
 
 const loadRankings = async () => {
   stats.class_rankings = await api.dashboard.getClassRankings(buildQuery())
+}
+
+const ensureCharts = async () => {
+  await nextTick()
+
+  if (scoreChartRef.value && !scoreChart) {
+    scoreChart = echarts.init(scoreChartRef.value)
+  }
+
+  if (rankingChartRef.value && !rankingChart) {
+    rankingChart = echarts.init(rankingChartRef.value)
+  }
 }
 
 const updateCharts = () => {
@@ -206,19 +241,34 @@ const updateCharts = () => {
 }
 
 const loadAll = async () => {
+  if (isTeachingDashboard.value && !selectedCourse.value) {
+    resetStats()
+    return
+  }
+
   await Promise.all([loadStats(), loadRankings()])
+  await ensureCharts()
   updateCharts()
 }
 
+const resizeCharts = () => {
+  scoreChart?.resize()
+  rankingChart?.resize()
+}
+
 onMounted(async () => {
-  await loadSemesters()
-  scoreChart = echarts.init(scoreChartRef.value)
-  rankingChart = echarts.init(rankingChartRef.value)
+  if (showSemesterFilter.value) {
+    await loadSemesters()
+  }
+
   await loadAll()
-  window.addEventListener('resize', () => {
-    scoreChart?.resize()
-    rankingChart?.resize()
-  })
+  window.addEventListener('resize', resizeCharts)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeCharts)
+  scoreChart?.dispose()
+  rankingChart?.dispose()
 })
 
 watch(selectedCourse, async () => {
@@ -309,6 +359,14 @@ watch(selectedCourse, async () => {
 
 .chart-box {
   height: 320px;
+}
+
+@media (max-width: 992px) {
+  .stats-row :deep(.el-col),
+  .charts-row :deep(.el-col) {
+    max-width: 100%;
+    flex: 0 0 100%;
+  }
 }
 
 @media (max-width: 768px) {
