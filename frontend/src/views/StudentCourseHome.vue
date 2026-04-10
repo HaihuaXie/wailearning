@@ -21,9 +21,20 @@
           <span class="overview-label">任课老师</span>
           <strong>{{ selectedCourse.teacher_name || '未分配' }}</strong>
         </article>
-        <article class="overview-card">
+        <article class="overview-card overview-card-schedule">
           <span class="overview-label">课程时间</span>
-          <strong>{{ formatCourseTimeDisplay(selectedCourse) || '未设置' }}</strong>
+          <div v-if="courseTimeCards.length" class="course-time-list">
+            <div
+              v-for="(courseTime, index) in courseTimeCards"
+              :key="`${courseTime.dateRange}-${courseTime.weekday}-${index}`"
+              class="course-time-card"
+            >
+              <span class="course-time-card__line">{{ courseTime.dateRange }}</span>
+              <span class="course-time-card__line">{{ courseTime.weekday }}</span>
+              <span class="course-time-card__line">{{ courseTime.time }}</span>
+            </div>
+          </div>
+          <strong v-else>未设置</strong>
         </article>
       </section>
 
@@ -119,18 +130,17 @@ import { useRouter } from 'vue-router'
 
 import api from '@/api'
 import { useUserStore } from '@/stores/user'
-import { formatCourseTimes } from '@/utils/courseTimes'
+import { buildCourseTimeCards } from '@/utils/courseTimes'
 
 const router = useRouter()
 const userStore = useUserStore()
 
 const selectedCourse = computed(() => userStore.selectedCourse)
+const courseTimeCards = computed(() => buildCourseTimeCards(selectedCourse.value))
 const loading = ref(false)
 const materials = ref([])
 const homeworks = ref([])
 const notifications = ref([])
-
-const formatCourseTimeDisplay = course => formatCourseTimes(course)
 
 const formatDate = value => {
   if (!value) {
@@ -232,6 +242,7 @@ watch(selectedCourse, () => {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+  align-items: stretch;
 }
 
 .overview-card,
@@ -249,9 +260,43 @@ watch(selectedCourse, () => {
   gap: 8px;
 }
 
+.overview-card-schedule {
+  gap: 12px;
+}
+
 .overview-label {
   font-size: 13px;
   color: #64748b;
+}
+
+.course-time-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.course-time-card,
+.item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.course-time-card__line,
+.item-card span {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #64748b;
+}
+
+.course-time-card__line:first-child {
+  color: #334155;
 }
 
 .workspace-grid {
@@ -285,15 +330,6 @@ watch(selectedCourse, () => {
 }
 
 .item-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #f8fafc;
-  text-align: left;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
@@ -306,11 +342,6 @@ watch(selectedCourse, () => {
 
 .item-card strong {
   color: #0f172a;
-}
-
-.item-card span {
-  font-size: 13px;
-  color: #64748b;
 }
 
 @media (max-width: 1024px) {

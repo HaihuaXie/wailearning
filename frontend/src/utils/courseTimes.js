@@ -1,6 +1,14 @@
-import { formatScheduleValue } from '@/utils/courseSchedule'
+import {
+  PERIOD_OPTIONS,
+  WEEK_DAYS,
+  formatScheduleValue,
+  parseScheduleValue,
+  parseScheduleSlotKey
+} from '@/utils/courseSchedule'
 
 const pad = value => `${value}`.padStart(2, '0')
+const weekdayMap = Object.fromEntries(WEEK_DAYS.map(item => [item.value, item.label]))
+const periodMap = Object.fromEntries(PERIOD_OPTIONS.map(item => [item.value, item]))
 
 export const normalizeCourseBoundaryDate = value => {
   if (!value) {
@@ -103,9 +111,30 @@ const formatDisplayDate = value => {
   })
 }
 
+const formatSlashDate = value => {
+  const normalizedDate = normalizeCourseBoundaryDate(value)
+
+  if (!normalizedDate) {
+    return ''
+  }
+
+  return `${normalizedDate.getFullYear()}/${pad(normalizedDate.getMonth() + 1)}/${pad(normalizedDate.getDate())}`
+}
+
 export const formatCourseTimeDateRange = (startAt, endAt) => {
   const startLabel = formatDisplayDate(startAt)
   const endLabel = formatDisplayDate(endAt)
+
+  if (startLabel && endLabel) {
+    return `${startLabel} - ${endLabel}`
+  }
+
+  return startLabel || endLabel || ''
+}
+
+export const formatCourseTimeCardDateRange = (startAt, endAt) => {
+  const startLabel = formatSlashDate(startAt)
+  const endLabel = formatSlashDate(endAt)
 
   if (startLabel && endLabel) {
     return `${startLabel} - ${endLabel}`
@@ -156,3 +185,59 @@ export const getCourseTimeDateBounds = source => {
     { startDate: null, endDate: null }
   )
 }
+
+const buildCourseTimeDayGroups = weeklySchedule => {
+  const groupedByDay = new Map()
+
+  for (const slot of parseScheduleValue(weeklySchedule)) {
+    const parsedSlot = parseScheduleSlotKey(slot)
+
+    if (!parsedSlot) {
+      continue
+    }
+
+    if (!groupedByDay.has(parsedSlot.dayValue)) {
+      groupedByDay.set(parsedSlot.dayValue, [])
+    }
+
+    groupedByDay.get(parsedSlot.dayValue).push(parsedSlot.periodValue)
+  }
+
+  return [...groupedByDay.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([dayValue, periods]) => ({
+      dayValue,
+      weekday: weekdayMap[dayValue] || `周${dayValue}`,
+      periods: [...new Set(periods)].sort((left, right) => left - right)
+    }))
+}
+
+const formatCourseTimePeriods = periods =>
+  periods
+    .map(periodValue => {
+      const period = periodMap[periodValue]
+      return period
+        ? `第${periodValue}小节(${period.time})`
+        : `第${periodValue}小节`
+    })
+    .join('、')
+
+export const buildCourseTimeCards = source =>
+  resolveCourseTimes(source).flatMap(courseTime => {
+    const dateRange = formatCourseTimeCardDateRange(courseTime.course_start_at, courseTime.course_end_at)
+    const dayGroups = buildCourseTimeDayGroups(courseTime.weekly_schedule)
+
+    if (!dayGroups.length) {
+      return [{
+        dateRange,
+        weekday: courseTime.weekly_schedule || '',
+        time: ''
+      }]
+    }
+
+    return dayGroups.map(dayGroup => ({
+      dateRange,
+      weekday: dayGroup.weekday,
+      time: formatCourseTimePeriods(dayGroup.periods)
+    }))
+  })
