@@ -52,6 +52,10 @@ def _normalize_semester_label(semester: Optional[str], db: Session) -> Optional[
             if 0 <= term_index < len(candidates):
                 return candidates[term_index].name
         if term == "1":
+            return f"{year}-\u6625\u5b63"
+        if term == "2":
+            return f"{year}-\u79cb\u5b63"
+        if term == "1":
             return f"{year}-春季"
         if term == "2":
             return f"{year}-秋季"
@@ -59,16 +63,45 @@ def _normalize_semester_label(semester: Optional[str], db: Session) -> Optional[
     return normalized
 
 
+def _resolve_semester(
+    db: Session,
+    *,
+    semester_id: Optional[int] = None,
+    semester_name: Optional[str] = None,
+) -> Optional[Semester]:
+    if semester_id:
+        semester = db.query(Semester).filter(Semester.id == semester_id).first()
+        if not semester:
+            raise HTTPException(status_code=400, detail="Semester not found.")
+        return semester
+
+    normalized_name = _normalize_semester_label(semester_name, db)
+    if not normalized_name:
+        return None
+
+    semester = db.query(Semester).filter(Semester.name == normalized_name).first()
+    if semester:
+        return semester
+
+    raise HTTPException(status_code=400, detail="Semester not found.")
+
+
 def _serialize_course(course: Subject, db: Session) -> SubjectResponse:
     student_count = db.query(CourseEnrollment).filter(CourseEnrollment.subject_id == course.id).count()
+    semester_label = (
+        course.semester_obj.name
+        if course.semester_obj
+        else _normalize_semester_label(course.semester, db)
+    )
     return SubjectResponse(
         id=course.id,
         name=course.name,
         teacher_id=course.teacher_id,
         class_id=course.class_id,
+        semester_id=course.semester_id,
         course_type=course.course_type or "required",
         status=course.status or "active",
-        semester=_normalize_semester_label(course.semester, db),
+        semester=semester_label,
         weekly_schedule=course.weekly_schedule,
         course_start_at=course.course_start_at,
         course_end_at=course.course_end_at,
@@ -207,12 +240,19 @@ def create_subject(
         db.add(class_obj)
         db.flush()
 
+    semester_obj = _resolve_semester(
+        db,
+        semester_id=subject_data.semester_id,
+        semester_name=subject_data.semester,
+    )
+    semester_label = semester_obj.name if semester_obj else None
+
     existing = (
         db.query(Subject)
         .filter(
             Subject.name == subject_data.name,
             Subject.class_id == class_obj.id,
-            Subject.semester == subject_data.semester,
+            Subject.semester_id == (semester_obj.id if semester_obj else None),
         )
         .first()
     )
@@ -223,9 +263,10 @@ def create_subject(
         name=subject_data.name,
         teacher_id=target_teacher_id,
         class_id=class_obj.id,
+        semester_id=semester_obj.id if semester_obj else None,
         course_type=subject_data.course_type,
         status=subject_data.status,
-        semester=subject_data.semester,
+        semester=semester_label,
         weekly_schedule=subject_data.weekly_schedule,
         course_start_at=subject_data.course_start_at,
         course_end_at=subject_data.course_end_at,
@@ -294,10 +335,19 @@ def update_subject(
     if current_user.role != UserRole.ADMIN:
         subject_data.teacher_id = current_user.id
 
-    for field in ["name", "teacher_id", "class_id", "course_type", "status", "semester", "weekly_schedule", "course_start_at", "course_end_at", "description"]:
+    for field in ["name", "teacher_id", "class_id", "course_type", "status", "weekly_schedule", "course_start_at", "course_end_at", "description"]:
         value = getattr(subject_data, field)
         if value is not None:
             setattr(course, field, value)
+
+    if subject_data.semester_id is not None or subject_data.semester is not None:
+        semester_obj = _resolve_semester(
+            db,
+            semester_id=subject_data.semester_id,
+            semester_name=subject_data.semester,
+        )
+        course.semester_id = semester_obj.id if semester_obj else None
+        course.semester = semester_obj.name if semester_obj else None
 
     if course.class_id is None:
         raise HTTPException(status_code=400, detail="Course must belong to a class.")

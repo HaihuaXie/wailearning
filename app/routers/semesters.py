@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -9,12 +11,33 @@ from app.auth import get_current_active_user
 
 router = APIRouter(prefix="/api/semesters", tags=["学期管理"])
 
+
+def normalize_semester_name(name: str) -> str:
+    normalized = (name or "").strip()
+    matched = re.fullmatch(r"(\d{4})-(1|2)", normalized)
+    if not matched:
+        return normalized
+
+    year, term = matched.groups()
+    return f"{year}-\u6625\u5b63" if term == "1" else f"{year}-\u79cb\u5b63"
+    return f"{year}-春季" if term == "1" else f"{year}-秋季"
+
 def init_default_semesters(db: Session):
     default_semesters = [
         {"name": "2024-春季", "year": 2024},
         {"name": "2024-秋季", "year": 2024},
         {"name": "2025-春季", "year": 2025},
         {"name": "2025-秋季", "year": 2025},
+        {"name": "2026-春季", "year": 2026},
+        {"name": "2026-秋季", "year": 2026},
+    ]
+    default_semesters = [
+        {"name": "2024-\u6625\u5b63", "year": 2024},
+        {"name": "2024-\u79cb\u5b63", "year": 2024},
+        {"name": "2025-\u6625\u5b63", "year": 2025},
+        {"name": "2025-\u79cb\u5b63", "year": 2025},
+        {"name": "2026-\u6625\u5b63", "year": 2026},
+        {"name": "2026-\u79cb\u5b63", "year": 2026},
     ]
     
     for sem_data in default_semesters:
@@ -60,12 +83,13 @@ def create_semester(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    existing = db.query(Semester).filter(Semester.name == semester_data.name).first()
+    normalized_name = normalize_semester_name(semester_data.name)
+    existing = db.query(Semester).filter(Semester.name == normalized_name).first()
     if existing:
         raise HTTPException(status_code=400, detail="学期名称已存在")
     
     semester = Semester(
-        name=semester_data.name,
+        name=normalized_name,
         year=semester_data.year,
         is_active=True
     )
@@ -85,17 +109,18 @@ def update_semester(
     if not semester:
         raise HTTPException(status_code=404, detail="学期不存在")
     
+    normalized_name = normalize_semester_name(semester_data.name)
     existing = db.query(Semester).filter(
-        Semester.name == semester_data.name,
+        Semester.name == normalized_name,
         Semester.id != semester_id
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="学期名称已存在")
     
     old_name = semester.name
-    semester.name = semester_data.name
+    semester.name = normalized_name
     semester.year = semester_data.year
-    sync_semester_name_references(db, old_name, semester_data.name)
+    sync_semester_name_references(db, old_name, normalized_name)
     db.commit()
     db.refresh(semester)
     return semester

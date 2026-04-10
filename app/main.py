@@ -5,7 +5,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.attachments import UPLOADS_DIR, ensure_upload_directories
-from app.bootstrap import ensure_schema_updates, normalize_teacher_class_assignments
+from app.bootstrap import (
+    ensure_schema_updates,
+    normalize_semester_catalog,
+    normalize_teacher_class_assignments,
+    sync_subject_semester_links,
+)
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.routers import (
@@ -78,6 +83,8 @@ def startup_tasks():
     db = SessionLocal()
     try:
         normalize_teacher_class_assignments(db)
+        normalize_semester_catalog(db)
+        sync_subject_semester_links(db)
     finally:
         db.close()
 

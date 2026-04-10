@@ -83,9 +83,9 @@
             <el-radio label="completed">已结束</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="所属学期" prop="semester">
-          <el-select v-model="form.semester" placeholder="请选择学期" style="width: 100%" clearable>
-            <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.name" />
+        <el-form-item label="所属学期" prop="semester_id">
+          <el-select v-model="form.semester_id" placeholder="请选择学期" style="width: 100%" clearable>
+            <el-option v-for="item in semesters" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="起始日期" prop="course_start_at">
@@ -144,9 +144,9 @@ const form = reactive({
   name: '',
   class_id: null,
   teacher_id: null,
+  semester_id: null,
   course_type: 'required',
   status: 'active',
-  semester: '',
   weekly_schedule: '',
   course_start_at: '',
   course_end_at: '',
@@ -180,9 +180,9 @@ const resetForm = () => {
     name: '',
     class_id: null,
     teacher_id: null,
+    semester_id: null,
     course_type: 'required',
     status: 'active',
-    semester: '',
     weekly_schedule: '',
     course_start_at: '',
     course_end_at: '',
@@ -258,9 +258,9 @@ const openEditDialog = course => {
     name: course.name,
     class_id: course.class_id,
     teacher_id: course.teacher_id,
+    semester_id: course.semester_id ?? null,
     course_type: course.course_type || 'required',
     status: course.status || 'active',
-    semester: course.semester || '',
     weekly_schedule: course.weekly_schedule || '',
     course_start_at: normalizeDateField(course.course_start_at),
     course_end_at: normalizeDateField(course.course_end_at),
@@ -296,6 +296,7 @@ const submitForm = async () => {
   try {
     const payload = {
       ...form,
+      semester_id: form.semester_id || null,
       course_start_at: serializeDateField(form.course_start_at, 'start'),
       course_end_at: serializeDateField(form.course_end_at, 'end')
     }

@@ -195,6 +195,7 @@ class SubjectCreate(BaseModel):
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
     class_name: Optional[str] = None
+    semester_id: Optional[int] = None
     course_type: str = "required"
     status: str = "active"
     semester: Optional[str] = None
@@ -209,6 +210,7 @@ class SubjectUpdate(BaseModel):
     name: Optional[str] = None
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
+    semester_id: Optional[int] = None
     course_type: Optional[str] = None
     status: Optional[str] = None
     semester: Optional[str] = None
@@ -223,6 +225,7 @@ class SubjectResponse(BaseModel):
     name: str
     teacher_id: Optional[int] = None
     class_id: Optional[int] = None
+    semester_id: Optional[int] = None
     course_type: str = "required"
     status: str = "active"
     semester: Optional[str] = None
