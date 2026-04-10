@@ -1,7 +1,7 @@
 <template>
   <div class="teaching-calendar">
     <div class="calendar-header">
-      <div>
+      <div class="calendar-header__info">
         <div class="calendar-title-row">
           <h3>教学日历</h3>
           <span class="calendar-range">{{ courseRangeLabel }}</span>
@@ -92,7 +92,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-import { parseScheduleValue } from '@/utils/courseSchedule'
+import { PERIOD_OPTIONS, parseScheduleValue } from '@/utils/courseSchedule'
 import { buildHolidayMap } from '@/utils/holidayCalendar'
 
 const props = defineProps({
@@ -104,14 +104,15 @@ const props = defineProps({
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-const LEGACY_WEEKDAY_PATTERNS = [
+const periodMap = Object.fromEntries(PERIOD_OPTIONS.map(item => [item.value, item]))
+const legacyWeekdayPatterns = [
   { value: 1, label: '周一', patterns: [/周一/, /星期一/, /每周一/] },
   { value: 2, label: '周二', patterns: [/周二/, /星期二/, /每周二/] },
   { value: 3, label: '周三', patterns: [/周三/, /星期三/, /每周三/] },
   { value: 4, label: '周四', patterns: [/周四/, /星期四/, /每周四/] },
   { value: 5, label: '周五', patterns: [/周五/, /星期五/, /每周五/] },
   { value: 6, label: '周六', patterns: [/周六/, /星期六/, /每周六/] },
-  { value: 7, label: '周日', patterns: [/周日/, /星期日/, /周天/, /星期天/, /每周日/, /每周天/] }
+  { value: 7, label: '周日', patterns: [/周日/, /星期日/, /星期天/, /周天/, /每周日/, /每周天/] }
 ]
 
 const currentMonth = ref(new Date())
@@ -149,15 +150,9 @@ const normalizeBoundaryDate = value => {
   return new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate())
 }
 
-const courseStartDate = computed(() => normalizeBoundaryDate(props.course?.course_start_at))
-const courseEndDate = computed(() => normalizeBoundaryDate(props.course?.course_end_at))
-const hasValidRange = computed(() =>
-  Boolean(courseStartDate.value && courseEndDate.value && courseEndDate.value >= courseStartDate.value)
-)
-
 const normalizePeriods = periods => [...new Set(periods)].sort((left, right) => left - right)
 
-const formatPeriodSummary = periods => {
+const formatCompactPeriodSummary = periods => {
   const sortedPeriods = normalizePeriods(periods)
 
   if (!sortedPeriods.length) {
@@ -183,6 +178,21 @@ const formatPeriodSummary = periods => {
   return groups.join('、')
 }
 
+const formatDetailedPeriodSummary = periods => {
+  const sortedPeriods = normalizePeriods(periods)
+
+  if (!sortedPeriods.length) {
+    return '常规授课'
+  }
+
+  return sortedPeriods
+    .map(periodValue => {
+      const period = periodMap[periodValue]
+      return period ? `第${periodValue}小节(${period.time})` : `第${periodValue}小节`
+    })
+    .join('、')
+}
+
 const extractLegacyWeekdays = scheduleText => {
   const normalizedText = `${scheduleText || ''}`.trim()
 
@@ -190,10 +200,16 @@ const extractLegacyWeekdays = scheduleText => {
     return []
   }
 
-  return LEGACY_WEEKDAY_PATTERNS.filter(day =>
+  return legacyWeekdayPatterns.filter(day =>
     day.patterns.some(pattern => pattern.test(normalizedText))
   )
 }
+
+const courseStartDate = computed(() => normalizeBoundaryDate(props.course?.course_start_at))
+const courseEndDate = computed(() => normalizeBoundaryDate(props.course?.course_end_at))
+const hasValidRange = computed(() =>
+  Boolean(courseStartDate.value && courseEndDate.value && courseEndDate.value >= courseStartDate.value)
+)
 
 const scheduleByDay = computed(() => {
   const parsedSlots = parseScheduleValue(props.course?.weekly_schedule)
@@ -249,7 +265,7 @@ const classDateMap = computed(() => {
     if (scheduleByDay.value.has(dayValue) && !holidayMap.value[dateKey]) {
       entries[dateKey] = {
         periods,
-        summary: formatPeriodSummary(periods)
+        summary: formatCompactPeriodSummary(periods)
       }
     }
 
@@ -287,36 +303,19 @@ const currentMonthLabel = computed(() =>
 )
 
 const scheduleLabel = computed(() => {
-  const parsedSlots = parseScheduleValue(props.course?.weekly_schedule)
+  const grouped = [...scheduleByDay.value.entries()].sort((left, right) => left[0] - right[0])
 
-  if (parsedSlots.length) {
-    const grouped = new Map()
-
-    for (const slot of parsedSlots) {
-      const [dayValueRaw, periodValueRaw] = slot.split('-')
-      const dayValue = Number(dayValueRaw)
-      const periodValue = Number(periodValueRaw)
-
-      if (!grouped.has(dayValue)) {
-        grouped.set(dayValue, [])
-      }
-
-      grouped.get(dayValue).push(periodValue)
-    }
-
-    return [...grouped.entries()]
-      .sort((left, right) => left[0] - right[0])
-      .map(([dayValue, periods]) => `${weekdayLabels[dayValue - 1]} ${formatPeriodSummary(periods)}`)
-      .join('；')
+  if (!grouped.length) {
+    return ''
   }
 
-  const legacyWeekdays = extractLegacyWeekdays(props.course?.weekly_schedule)
-
-  if (legacyWeekdays.length) {
-    return legacyWeekdays.map(day => `${day.label} 常规授课`).join('；')
-  }
-
-  return ''
+  return grouped
+    .map(([dayValue, periods]) => {
+      const dayLabel = weekdayLabels[dayValue - 1] || `周${dayValue}`
+      const detail = periods.length ? formatDetailedPeriodSummary(periods) : '常规授课'
+      return `${dayLabel} ${detail}`
+    })
+    .join('；')
 })
 
 const courseRangeLabel = computed(() => {
@@ -404,10 +403,15 @@ watch(
   margin-bottom: 12px;
 }
 
+.calendar-header__info {
+  min-width: 0;
+}
+
 .calendar-title-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .calendar-title-row h3 {
@@ -432,6 +436,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .calendar-nav {
@@ -503,7 +508,7 @@ watch(
 }
 
 .calendar-weekday {
-  padding: 10px 8px;
+  padding: 10px 6px;
   text-align: center;
   font-size: 12px;
   font-weight: 600;
@@ -513,7 +518,7 @@ watch(
 }
 
 .calendar-cell {
-  min-height: 110px;
+  min-height: 106px;
   padding: 8px;
   border-right: 1px solid #dbe4f0;
   border-bottom: 1px solid #dbe4f0;
