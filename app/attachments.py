@@ -12,7 +12,7 @@ from app.config import settings
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOADS_DIR = Path(settings.UPLOADS_DIR).expanduser() if settings.UPLOADS_DIR else BASE_DIR / "uploads"
 ATTACHMENTS_DIR = UPLOADS_DIR / "attachments"
-MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024
+MAX_ATTACHMENT_SIZE = 200 * 1024 * 1024
 BLOCKED_ATTACHMENT_EXTENSIONS = {
     ".apk",
     ".app",
@@ -82,7 +82,7 @@ async def save_attachment(file: UploadFile, request: Request) -> dict[str, objec
     if size == 0:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
     if size > MAX_ATTACHMENT_SIZE:
-        raise HTTPException(status_code=400, detail="Attachment size must be 20 MB or smaller.")
+        raise HTTPException(status_code=400, detail="Attachment size must be 200 MB or smaller.")
 
     stored_name = f"{uuid4().hex}{extension}"
     target_path = ATTACHMENTS_DIR / stored_name
