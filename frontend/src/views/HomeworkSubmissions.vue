@@ -173,8 +173,6 @@ const handleSelectionChange = rows => {
 
 const selectableRow = row => Boolean(row.submission_id && row.attachment_url)
 
-const canReviewSubmission = row => row.submission_id !== null && row.submission_id !== undefined
-
 const hasSavedReview = row =>
   row.review_score !== null && row.review_score !== undefined || Boolean(row.review_comment)
 
@@ -231,9 +229,16 @@ const downloadSelected = async () => {
   }
 }
 
+const saveReviewRequest = (row, payload) => {
+  if (row.submission_id !== null && row.submission_id !== undefined) {
+    return api.homework.reviewSubmission(route.params.id, row.submission_id, payload)
+  }
+  return api.homework.reviewStudentSubmission(route.params.id, row.student_id, payload)
+}
+
 const saveReview = async row => {
-  if (!canReviewSubmission(row)) {
-    ElMessage.error('未提交的作业不能评分')
+  if (row.student_id === null || row.student_id === undefined) {
+    ElMessage.error('缺少学生信息，无法保存评分')
     return
   }
 
@@ -246,7 +251,7 @@ const saveReview = async row => {
 
   row.saving_review = true
   try {
-    await api.homework.reviewSubmission(route.params.id, row.submission_id, {
+    await saveReviewRequest(row, {
       review_score: score,
       review_comment: row.review_comment_input?.trim() || null
     })

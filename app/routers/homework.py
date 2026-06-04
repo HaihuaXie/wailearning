@@ -97,6 +97,10 @@ def _serialize_submission(submission: HomeworkSubmission) -> HomeworkSubmissionR
     )
 
 
+def _has_submission_payload(submission: Optional[HomeworkSubmission]) -> bool:
+    return bool(submission and (submission.content or submission.attachment_url))
+
+
 def _serialize_submission_status(
     enrollment: Optional[CourseEnrollment],
     submission: Optional[HomeworkSubmission],
@@ -104,17 +108,18 @@ def _serialize_submission_status(
 ) -> HomeworkSubmissionStatusResponse:
     student = enrollment.student if enrollment and enrollment.student else fallback_student
     class_obj = enrollment.class_obj if enrollment and enrollment.class_obj else (student.class_obj if student else None)
+    has_submission_payload = _has_submission_payload(submission)
     return HomeworkSubmissionStatusResponse(
         student_id=student.id if student else submission.student_id,
         student_name=student.name if student else None,
         student_no=student.student_no if student else None,
         class_name=class_obj.name if class_obj else None,
         submission_id=submission.id if submission else None,
-        status="submitted" if submission else "pending",
-        submitted_at=submission.submitted_at if submission else None,
-        content=submission.content if submission else None,
-        attachment_name=submission.attachment_name if submission else None,
-        attachment_url=submission.attachment_url if submission else None,
+        status="submitted" if has_submission_payload else "pending",
+        submitted_at=submission.submitted_at if has_submission_payload else None,
+        content=submission.content if has_submission_payload else None,
+        attachment_name=submission.attachment_name if has_submission_payload else None,
+        attachment_url=submission.attachment_url if has_submission_payload else None,
         review_score=submission.review_score if submission else None,
         review_comment=submission.review_comment if submission else None,
     )
@@ -406,6 +411,8 @@ def submit_homework(
 
     _ensure_homework_submission_open(homework, data, submission)
 
+    had_submission_payload = _has_submission_payload(submission)
+
     if submission is None:
         submission = HomeworkSubmission(
             homework_id=homework.id,
@@ -436,6 +443,8 @@ def submit_homework(
     submission.content = next_content
     submission.attachment_name = next_attachment_name
     submission.attachment_url = next_attachment_url
+    if not had_submission_payload:
+        submission.submitted_at = datetime.now()
 
     db.commit()
     db.refresh(submission)
@@ -473,6 +482,42 @@ def get_homework_submissions(
     return HomeworkSubmissionStatusListResponse(total=len(rows), data=rows)
 
 
+def _ensure_review_student(homework: Homework, student_id: int, db: Session) -> Student:
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    if student.class_id != homework.class_id:
+        raise HTTPException(status_code=403, detail="This student does not belong to the homework class.")
+
+    if homework.subject_id:
+        enrollment = (
+            db.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.subject_id == homework.subject_id,
+                CourseEnrollment.student_id == student.id,
+            )
+            .first()
+        )
+        if not enrollment:
+            raise HTTPException(status_code=403, detail="This student is not enrolled in the homework course.")
+
+    return student
+
+
+def _apply_submission_review(
+    submission: HomeworkSubmission,
+    payload: HomeworkSubmissionReviewUpdate,
+    db: Session,
+) -> HomeworkSubmission:
+    submission.review_score = payload.review_score
+    submission.review_comment = payload.review_comment
+
+    db.commit()
+    db.refresh(submission)
+    return submission
+
+
 @router.put("/{homework_id}/submissions/{submission_id}/review", response_model=HomeworkSubmissionResponse)
 def review_homework_submission(
     homework_id: int,
@@ -496,12 +541,41 @@ def review_homework_submission(
     if not submission:
         raise HTTPException(status_code=404, detail="Homework submission not found.")
 
-    submission.review_score = payload.review_score
-    submission.review_comment = payload.review_comment
+    return _serialize_submission(_apply_submission_review(submission, payload, db))
 
-    db.commit()
-    db.refresh(submission)
-    return _serialize_submission(submission)
+
+@router.put("/{homework_id}/submissions/students/{student_id}/review", response_model=HomeworkSubmissionResponse)
+def review_homework_student(
+    homework_id: int,
+    student_id: int,
+    payload: HomeworkSubmissionReviewUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    if not is_teacher(current_user):
+        raise HTTPException(status_code=403, detail="Only teachers can review homework submissions.")
+
+    homework = _ensure_homework_access(_get_homework_or_404(homework_id, db), current_user, db)
+    student = _ensure_review_student(homework, student_id, db)
+    submission = (
+        db.query(HomeworkSubmission)
+        .filter(
+            HomeworkSubmission.homework_id == homework.id,
+            HomeworkSubmission.student_id == student.id,
+        )
+        .first()
+    )
+
+    if submission is None:
+        submission = HomeworkSubmission(
+            homework_id=homework.id,
+            student_id=student.id,
+            subject_id=homework.subject_id,
+            class_id=homework.class_id,
+        )
+        db.add(submission)
+
+    return _serialize_submission(_apply_submission_review(submission, payload, db))
 
 
 @router.post("/{homework_id}/submissions/download")
