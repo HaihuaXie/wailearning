@@ -341,7 +341,7 @@ def update_homework(
         homework.attachment_url = data.attachment_url
     if data.subject_id is not None:
         homework.subject_id = data.subject_id
-    if data.due_date is not None:
+    if "due_date" in data.model_fields_set:
         homework.due_date = data.due_date
 
     db.commit()

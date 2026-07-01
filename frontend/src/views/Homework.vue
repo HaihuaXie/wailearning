@@ -39,7 +39,7 @@
               {{ formatDate(row.due_date) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220">
+          <el-table-column label="操作" width="300">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="viewHomework(row)">查看</el-button>
               <el-button
@@ -55,6 +55,13 @@
                 @click="goToSubmissionStatus(row)"
               >
                 学生提交
+              </el-button>
+              <el-button
+                v-if="!userStore.isStudent"
+                size="small"
+                @click="openDeadlineDialog(row)"
+              >
+                改截止
               </el-button>
               <el-button
                 v-if="!userStore.isStudent"
@@ -129,6 +136,27 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="deadlineDialogVisible" title="修改截止时间" width="460px" destroy-on-close>
+      <el-form label-width="90px">
+        <el-form-item label="作业标题">
+          <span>{{ editingDeadlineHomework?.title || '未选择作业' }}</span>
+        </el-form-item>
+        <el-form-item label="截止时间">
+          <el-date-picker
+            v-model="deadlineForm.due_date"
+            type="datetime"
+            placeholder="请选择截止时间"
+            clearable
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="deadlineDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingDeadline" @click="saveDeadline">保存</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="detailVisible" title="作业详情" width="620px" destroy-on-close>
       <el-descriptions v-if="currentHomework" :column="2" border>
         <el-descriptions-item label="作业标题" :span="2">{{ currentHomework.title }}</el-descriptions-item>
@@ -162,9 +190,12 @@ const userStore = useUserStore()
 
 const loading = ref(false)
 const submitting = ref(false)
+const savingDeadline = ref(false)
 const dialogVisible = ref(false)
+const deadlineDialogVisible = ref(false)
 const detailVisible = ref(false)
 const currentHomework = ref(null)
+const editingDeadlineHomework = ref(null)
 const homeworks = ref([])
 const formRef = ref(null)
 const attachmentFile = ref(null)
@@ -178,6 +209,10 @@ const form = reactive({
   due_date: null,
   attachment_name: '',
   attachment_url: ''
+})
+
+const deadlineForm = reactive({
+  due_date: null
 })
 
 const rules = {
@@ -278,6 +313,31 @@ const submitForm = async () => {
     await loadHomeworks()
   } finally {
     submitting.value = false
+  }
+}
+
+const openDeadlineDialog = row => {
+  editingDeadlineHomework.value = row
+  deadlineForm.due_date = row.due_date ? new Date(row.due_date) : null
+  deadlineDialogVisible.value = true
+}
+
+const saveDeadline = async () => {
+  if (!editingDeadlineHomework.value) {
+    return
+  }
+
+  savingDeadline.value = true
+  try {
+    await api.homework.update(editingDeadlineHomework.value.id, {
+      due_date: deadlineForm.due_date || null
+    })
+    ElMessage.success('截止时间已更新')
+    deadlineDialogVisible.value = false
+    editingDeadlineHomework.value = null
+    await loadHomeworks()
+  } finally {
+    savingDeadline.value = false
   }
 }
 
